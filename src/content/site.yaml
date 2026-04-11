@@ -9,12 +9,12 @@
 # Your name (used for the page title, <h1>, and <meta> tags)
 name:
   en: Yongyi Zang
-  zh: 臧永毅
+  zh: 臧永宜
 
 # Meta description (fallback when a more specific one isn't set)
 description:
-  en: Researcher in Audio and Music AI
-  zh: 音频与音乐AI研究者
+  en: AI Researcher
+  zh: AI 研究员
 
 # Profile image — path relative to /public
 profileImage: /favicon.jpg
@@ -22,6 +22,10 @@ profileImage: /favicon.jpg
 # Social links — rendered as a row of text links under the bio.
 # Add/remove/reorder freely. `label` is shown, `url` is the target.
 links:
+  - label: email
+    url: mailto:zang@yongyi.dev
+  - label: linkedin
+    url: https://www.linkedin.com/in/yongyi-zang
   - label: scholar
     url: https://scholar.google.com/citations?user=B6Nw9jMAAAAJ
   - label: github
