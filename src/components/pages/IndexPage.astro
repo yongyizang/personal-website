@@ -1,0 +1,278 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SearchIsland from '../search/SearchIsland';
+import BlogList from '../blog/BlogList.astro';
+import { getCollection, render } from 'astro:content';
+import { t } from '../../i18n/ui';
+import type { Locale } from '../../i18n/ui';
+import { site, news } from '../../lib/site';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+
+// Blog posts filtered to the current locale.
+const allPosts = await getCollection('blog');
+const posts = allPosts.filter(p => p.data.lang === locale);
+
+// Bio is authored as MDX (src/content/bio/*.mdx) so it can contain links and
+// other markdown. Short is shown by default; long is revealed on toggle.
+const bios = await getCollection('bio');
+const shortBioEntry = bios.find(b => b.data.lang === locale && b.data.variant === 'short');
+const longBioEntry = bios.find(b => b.data.lang === locale && b.data.variant === 'long');
+const { Content: ShortBio } = await render(shortBioEntry!);
+const { Content: LongBio } = await render(longBioEntry!);
+
+// Name, description, profile image, social links, news items are all pulled
+// from src/content/site.yaml and src/content/news.yaml — edit those files to
+// change the home page content.
+const name = site.name[locale];
+const description = site.description[locale];
+---
+
+<BaseLayout title={name} description={description}>
+  <div class="page-wrap">
+    <header class="site-header">
+      <div class="header-top">
+        <div class="header-text">
+          <div class="header-name">
+            <img src={site.profileImage} alt={name} class="profile-photo profile-mobile" />
+            <h1>{name}</h1>
+          </div>
+          <div class="bio-wrap" id="bio-wrap">
+            <div class="bio bio-short" id="bio-short"><ShortBio /></div>
+            <div class="bio bio-long" id="bio-long"><LongBio /></div>
+            <button
+              class="bio-toggle" id="bio-toggle"
+              data-more={t(locale, 'home.bioMore')}
+              data-less={t(locale, 'home.bioLess')}
+            >
+              {t(locale, 'home.bioMore')}
+            </button>
+          </div>
+          <nav class="links">
+            {site.links.map(link => (
+              <a href={link.url} target="_blank" rel="noopener">{link.label}</a>
+            ))}
+          </nav>
+        </div>
+        <img src={site.profileImage} alt={name} class="profile-photo profile-desktop" />
+      </div>
+    </header>
+
+    <div class="news-bar" id="news-bar">
+      <p class="news-latest" id="news-toggle">{news[0].date} — {news[0][locale]}</p>
+      <div class="news-all" id="news-all">
+        {news.slice(1).map(item => (
+          <p>{item.date} — {item[locale]}</p>
+        ))}
+      </div>
+    </div>
+
+    <section class="blog-section">
+      <SearchIsland client:idle locale={locale} />
+      <BlogList posts={posts} locale={locale} />
+    </section>
+  </div>
+</BaseLayout>
+
+<style lang="scss">
+  @use '../../styles/variables' as *;
+
+  .page-wrap {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  .site-header {
+    padding: 3.5rem 0 1.5rem;
+  }
+
+  .header-top {
+    display: flex;
+    align-items: center;
+  }
+
+  .header-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .header-name {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .profile-photo {
+    object-fit: cover;
+    flex-shrink: 0;
+    border-radius: 50%;
+  }
+
+  .profile-mobile {
+    width: 56px;
+    height: 56px;
+  }
+
+  .profile-desktop {
+    display: none;
+    width: 150px;
+    height: 150px;
+  }
+
+  @media (min-width: $small-device) {
+    .header-top {
+      gap: 2rem;
+    }
+
+    .profile-mobile {
+      display: none;
+    }
+
+    .profile-desktop {
+      display: block;
+    }
+  }
+
+  h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+
+  @media (min-width: $small-device) {
+    h1 { font-size: 2.75rem; }
+  }
+
+  .bio-wrap {
+    margin-top: 1rem;
+  }
+
+  .bio {
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin: 0;
+
+    :global(p) { margin: 0; }
+    :global(a) {
+      color: var(--text-secondary);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      transition: color 0.15s;
+      &:hover { color: var(--text-primary); }
+    }
+  }
+
+  .bio-long {
+    display: none;
+  }
+
+  .bio-wrap.expanded .bio-short {
+    display: none;
+  }
+
+  .bio-wrap.expanded .bio-long {
+    display: block;
+  }
+
+  .bio-toggle {
+    display: inline-block;
+    margin-top: 0.4rem;
+    padding: 0;
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-size: 0.85rem;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: color 0.15s;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+  }
+
+  .links {
+    margin-top: 1rem;
+    display: flex;
+    gap: 1.25rem;
+    font-size: 0.9rem;
+
+    a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.15s;
+      &:hover { color: var(--text-primary); }
+    }
+  }
+
+  .news-bar {
+    margin-top: 0.75rem;
+  }
+
+  .news-latest {
+    font-size: 0.85rem;
+    color: var(--text-tertiary);
+    margin: 0;
+    line-height: 1.5;
+    cursor: pointer;
+    transition: color 0.15s;
+
+    &:hover {
+      color: var(--text-secondary);
+    }
+  }
+
+  .news-all {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+
+  .news-bar.expanded .news-all {
+    max-height: 12rem;
+    overflow-y: auto;
+  }
+
+  .news-all p {
+    font-size: 0.85rem;
+    color: var(--text-tertiary);
+    line-height: 1.5;
+    margin: 0.2rem 0;
+  }
+
+  .blog-section {
+    padding: 1.25rem 0 4rem;
+    border-top: 1px solid var(--border-color);
+  }
+</style>
+
+<script>
+  function initIndex() {
+    const bioWrap = document.getElementById('bio-wrap');
+    const bioToggle = document.getElementById('bio-toggle');
+    if (bioWrap && bioToggle) {
+      bioToggle.addEventListener('click', () => {
+        const isExpanded = bioWrap.classList.toggle('expanded');
+        bioToggle.textContent = isExpanded ? bioToggle.dataset.less! : bioToggle.dataset.more!;
+      });
+    }
+
+    const newsBar = document.getElementById('news-bar');
+    const newsToggle2 = document.getElementById('news-toggle');
+    if (newsBar && newsToggle2) {
+      newsToggle2.addEventListener('click', () => {
+        newsBar.classList.toggle('expanded');
+      });
+    }
+  }
+
+  initIndex();
+  document.addEventListener('astro:after-swap', initIndex);
+</script>

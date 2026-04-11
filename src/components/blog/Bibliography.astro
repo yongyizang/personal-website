@@ -1,0 +1,85 @@
+---
+/**
+ * Bibliography component. Renders the reference list at the bottom of a post.
+ * Usage in MDX: <Bibliography entries={frontmatter.bibliography} />
+ */
+interface BibEntry {
+  key: string;
+  title: string;
+  authors: string;
+  venue?: string;
+  year?: number;
+  url?: string;
+  doi?: string;
+}
+
+interface Props {
+  entries: BibEntry[];
+}
+
+const { entries } = Astro.props;
+---
+
+{entries.length > 0 && (
+  <section class="bibliography">
+    <h2>References</h2>
+    <ol class="ref-list">
+      {entries.map((entry, i) => (
+        <li id={`ref-${entry.key}`} class="ref-entry">
+          <span class="ref-authors">{entry.authors}.</span>
+          {entry.url ? (
+            <a href={entry.url} class="ref-title" target="_blank" rel="noopener">{entry.title}</a>
+          ) : (
+            <span class="ref-title">{entry.title}</span>
+          )}
+          {entry.venue && <span class="ref-venue">. {entry.venue}</span>}
+          {entry.year && <span class="ref-year">, {entry.year}</span>}
+          {entry.doi && <span class="ref-doi">. <a href={`https://doi.org/${entry.doi}`} target="_blank" rel="noopener">doi:{entry.doi}</a></span>}
+          <span>.</span>
+        </li>
+      ))}
+    </ol>
+  </section>
+)}
+
+<style>
+  .bibliography {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-color);
+
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+  }
+
+  .ref-list {
+    padding-left: 1.75em;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
+
+  .ref-entry {
+    margin-bottom: 0.75rem;
+  }
+
+  .ref-authors {
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .ref-title {
+    font-style: italic;
+  }
+
+  a.ref-title {
+    color: var(--text-secondary);
+    text-decoration: underline;
+    &:hover { color: var(--text-primary); }
+  }
+</style>

@@ -1,0 +1,33 @@
+{
+  "name": "site",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build:search": "npx tsx src/scripts/generate-search-index.ts",
+    "build": "astro build",
+    "build:full": "npm run build:search && npm run build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.8",
+    "@astrojs/mdx": "^5.0.3",
+    "@astrojs/preact": "^5.1.0",
+    "@astrojs/sitemap": "^3.7.2",
+    "@huggingface/transformers": "^3.8.1",
+    "astro": "^6.1.1",
+    "fuse.js": "^7.2.0",
+    "preact": "^10.29.0",
+    "sass": "^1.98.0",
+    "typescript": "^5.9.3",
+    "yaml": "^2.8.3"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1",
+    "tsx": "^4.21.0"
+  }
+}

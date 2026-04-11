@@ -1,0 +1,38 @@
+---
+import { getLocaleFromUrl } from '../i18n/ui';
+
+const locale = getLocaleFromUrl(Astro.url);
+const currentPath = Astro.url.pathname;
+const enPath = currentPath.replace(`/${locale}`, '/en');
+const zhPath = currentPath.replace(`/${locale}`, '/zh');
+---
+
+<span class="lang-toggle">
+  <a href={enPath} class:list={{ active: locale === 'en' }}>EN</a>
+  <span class="sep">/</span>
+  <a href={zhPath} class:list={{ active: locale === 'zh' }}>中文</a>
+</span>
+
+<style>
+  .lang-toggle {
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+  }
+
+  a {
+    color: var(--text-tertiary);
+    text-decoration: none;
+    &:hover { color: var(--text-primary); text-decoration: none; }
+    &.active {
+      color: var(--text-primary);
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      pointer-events: none;
+    }
+  }
+
+  .sep { color: var(--text-tertiary); }
+</style>

@@ -1,0 +1,55 @@
+---
+/**
+ * Figure component for images with captions.
+ * Usage in MDX: <Figure src="/images/my-plot.png" alt="Description" caption="Figure 1: Results" wide />
+ *
+ * Props:
+ *   src: image path
+ *   alt: alt text
+ *   caption: optional caption text
+ *   wide: if true, image breaks out of text column (wider)
+ */
+interface Props {
+  src: string;
+  alt: string;
+  caption?: string;
+  wide?: boolean;
+}
+
+const { src, alt, caption, wide = false } = Astro.props;
+---
+
+<figure class:list={[{ wide }]}>
+  <img src={src} alt={alt} loading="lazy" />
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  figure {
+    margin: 2rem 0;
+  }
+
+  figure.wide {
+    margin-left: -3rem;
+    margin-right: -3rem;
+  }
+
+  @media (max-width: 768px) {
+    figure.wide {
+      margin-left: -1.5rem;
+      margin-right: -1.5rem;
+    }
+  }
+
+  img {
+    width: 100%;
+    border-radius: 4px;
+  }
+
+  figcaption {
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+  }
+</style>

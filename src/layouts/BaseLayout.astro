@@ -1,0 +1,238 @@
+---
+import BaseHead from '../components/BaseHead.astro';
+import LanguageToggle from '../components/LanguageToggle.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
+import { getLocaleFromUrl } from '../i18n/ui';
+
+interface Props {
+  title: string;
+  description: string;
+  image?: string;
+}
+
+const { title, description, image } = Astro.props;
+const locale = getLocaleFromUrl(Astro.url);
+---
+
+<!doctype html>
+<html lang={locale === 'zh' ? 'zh-CN' : 'en'}>
+  <BaseHead title={title} description={description} image={image} lang={locale} />
+  <body>
+    <div class="util-bar" transition:animate="none">
+      <LanguageToggle />
+      <span class="util-sep"></span>
+      <ThemeToggle />
+    </div>
+    <main>
+      <slot />
+    </main>
+  </body>
+</html>
+
+<script>
+  // Language switch morph animation.
+  //
+  // When the user clicks the EN/ZH toggle we intercept the navigation, morph
+  // every text element on the current page into its counterpart on the target
+  // page, then silently swap the DOM via View Transitions (skipping Astro's
+  // built-in fade so only our morph is visible). We also preserve scroll
+  // position, dark-mode state, and bio expand/collapse across the swap.
+
+  import { navigate } from 'astro:transitions/client';
+
+  // Character-level morph: eased left→right replacement with length
+  // interpolation. Cleaner than random scramble and reads well in CJK too.
+  function morphText(el: HTMLElement, newText: string, ms: number): Promise<void> {
+    const oldText = el.textContent || '';
+    if (oldText === newText) return Promise.resolve();
+    const t0 = performance.now();
+
+    return new Promise(resolve => {
+      (function frame() {
+        const p = Math.min((performance.now() - t0) / ms, 1);
+        // ease-in-out
+        const ep = p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
+
+        // Cursors through each text, moving at the eased rate
+        const newCursor = Math.floor(ep * newText.length);
+        const oldCursor = Math.floor(ep * oldText.length);
+
+        // New chars revealed on left + remaining old chars on right
+        el.textContent = newText.slice(0, newCursor) + oldText.slice(oldCursor);
+
+        if (p < 1) requestAnimationFrame(frame);
+        else { el.textContent = newText; resolve(); }
+      })();
+    });
+  }
+
+  // Find "leaf" text elements: those whose direct children contain no text.
+  // This gives us the innermost spans of text to morph, avoiding double-morph
+  // on containers. The util-bar and search island are excluded so they don't
+  // get scrambled during the animation.
+  function getLeafTextEls(root: Element): HTMLElement[] {
+    const all = root.querySelectorAll<HTMLElement>(
+      'h1, h2, h3, h4, h5, h6, p, a, span, time, button, li, figcaption, summary'
+    );
+    return Array.from(all).filter(el => {
+      if (!el.textContent?.trim()) return false;
+      if (el.closest('.util-bar, .search-island, script, style, noscript')) return false;
+      return !Array.from(el.children).some(c => c.textContent?.trim());
+    });
+  }
+
+  // Structural DOM path (e.g. "ARTICLE[0]>DIV[1]>P[2]") used to pair up
+  // elements across the old and new pages. Index-based matching breaks when
+  // page structures differ slightly between locales.
+  function elPath(el: Element, root: Element): string {
+    const parts: string[] = [];
+    let cur: Element | null = el;
+    while (cur && cur !== root) {
+      const parent = cur.parentElement;
+      if (!parent) break;
+      const idx = Array.from(parent.children)
+        .filter(c => c.tagName === cur!.tagName)
+        .indexOf(cur);
+      parts.unshift(`${cur.tagName}[${idx}]`);
+      cur = parent;
+    }
+    return parts.join('>');
+  }
+
+  // State that survives the view-transition swap. Set during the morph click
+  // handler, consumed after the new DOM is installed.
+  let skipTransition = false;
+  let savedScroll: number | null = null;
+  let bioWasExpanded = false;
+
+  document.addEventListener('astro:before-swap', (e: any) => {
+    // Theme data-attribute would otherwise reset to whatever the new
+    // document was rendered with; copy it onto the incoming document.
+    const theme = document.documentElement.getAttribute('data-theme');
+    if (theme && e.newDocument) {
+      e.newDocument.documentElement.setAttribute('data-theme', theme);
+    }
+    // Make the post-morph navigation invisible (no cross-fade on top of morph).
+    if (skipTransition) {
+      e.viewTransition?.skipTransition?.();
+      skipTransition = false;
+    }
+  });
+
+  // Restore scroll position and bio expand state after navigation finishes.
+  document.addEventListener('astro:page-load', () => {
+    if (savedScroll !== null) {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, savedScroll!);
+        savedScroll = null;
+      });
+    }
+    if (bioWasExpanded) {
+      const bw = document.getElementById('bio-wrap');
+      const bt = document.getElementById('bio-toggle');
+      if (bw && bt) {
+        bw.classList.add('expanded');
+        bt.textContent = bt.dataset.less!;
+      }
+      bioWasExpanded = false;
+    }
+  });
+
+  // The click handler must be re-installed after every view-transition swap
+  // so it binds to the new DOM. AbortController lets us remove the previous
+  // listener cleanly on each setup() call.
+  let ac: AbortController;
+
+  function setup() {
+    ac?.abort();
+    ac = new AbortController();
+
+    document.addEventListener('click', async (e) => {
+      const link = (e.target as Element)?.closest?.('.lang-toggle a:not(.active)') as HTMLAnchorElement | null;
+      if (!link) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const href = link.getAttribute('href')!;
+
+      try {
+        const doc = new DOMParser().parseFromString(
+          await (await fetch(href)).text(), 'text/html'
+        );
+
+        // Build path→element map from current page
+        const oldEls = getLeafTextEls(document.body);
+        const oldMap = new Map<string, HTMLElement>();
+        for (const el of oldEls) oldMap.set(elPath(el, document.body), el);
+
+        // Match new page elements by structural path
+        const newEls = getLeafTextEls(doc.body);
+        const pairs: { el: HTMLElement; newText: string; top: number }[] = [];
+
+        for (const nel of newEls) {
+          const path = elPath(nel, doc.body);
+          const oel = oldMap.get(path);
+          if (!oel) continue;
+          const ot = oel.textContent ?? '';
+          const nt = nel.textContent ?? '';
+          if (ot !== nt) {
+            pairs.push({ el: oel, newText: nt, top: oel.getBoundingClientRect().top });
+          }
+        }
+
+        pairs.sort((a, b) => a.top - b.top);
+
+        const MORPH_MS = 450;
+        const STAGGER_MS = 150;
+
+        await Promise.all(pairs.map(({ el, newText }, i) =>
+          new Promise<void>(resolve => {
+            const delay = pairs.length > 1 ? (i / (pairs.length - 1)) * STAGGER_MS : 0;
+            setTimeout(() => morphText(el, newText, MORPH_MS).then(resolve), delay);
+          })
+        ));
+
+        // Preserve bio expanded state
+        bioWasExpanded = !!document.getElementById('bio-wrap')?.classList.contains('expanded');
+
+        savedScroll = window.scrollY;
+        skipTransition = true;
+        navigate(href);
+      } catch {
+        window.location.href = href;
+      }
+    }, { capture: true, signal: ac.signal });
+  }
+
+  setup();
+  document.addEventListener('astro:after-swap', setup);
+</script>
+
+<style lang="scss">
+  @use '../styles/variables' as *;
+
+  .util-bar {
+    position: fixed;
+    top: 0.75rem;
+    right: 1.5rem;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--bg-primary);
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+  }
+
+  .util-sep {
+    width: 1px;
+    height: 0.85rem;
+    background: var(--border-color);
+  }
+
+  main {
+    flex: 1;
+  }
+</style>

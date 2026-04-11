@@ -1,0 +1,23 @@
+---
+import type { Locale } from '../../i18n/ui';
+import BlogCard from './BlogCard.astro';
+
+interface Props {
+  posts: any[];
+  locale: Locale;
+}
+
+const { posts, locale } = Astro.props;
+
+const sortedPosts = [...posts]
+  .filter(p => !p.data.draft)
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+---
+
+<div class="blog-list">
+  {sortedPosts.length === 0 ? (
+    <p class="no-posts">No posts yet.</p>
+  ) : (
+    sortedPosts.map(post => <BlogCard post={post} locale={locale} />)
+  )}
+</div>

@@ -1,0 +1,19 @@
+---
+// Static build: generate a lightweight HTML page that detects locale client-side
+---
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="robots" content="noindex">
+  <script>
+    const lang = navigator.language || navigator.userLanguage || 'en';
+    const isZh = /^zh/i.test(lang);
+    window.location.replace(isZh ? '/zh/' : '/en/');
+  </script>
+  <noscript>
+    <meta http-equiv="refresh" content="0;url=/en/">
+  </noscript>
+</head>
+<body></body>
+</html>

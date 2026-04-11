@@ -1,0 +1,66 @@
+---
+import type { Locale } from '../../i18n/ui';
+import { getLocalizedPath } from '../../i18n/ui';
+
+interface Props {
+  post: {
+    id: string;
+    data: {
+      title: string;
+      description: string;
+      date: Date;
+      slug: string;
+      lang: string;
+    };
+  };
+  locale: Locale;
+}
+
+const { post, locale } = Astro.props;
+const { title, description, date, slug } = post.data;
+---
+
+<article class="blog-card">
+  <h3><a href={getLocalizedPath(`/blog/${slug}`, locale)} class="post-link">{title}</a></h3>
+  {description && <p class="description">{description}</p>}
+  <p class="meta">
+    <time datetime={date.toISOString()}>
+      {date.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+    </time>
+  </p>
+</article>
+
+<style lang="scss">
+  @use '../../styles/variables' as *;
+
+  .blog-card {
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.15s;
+  }
+
+  h3 {
+    font-weight: 700;
+    font-size: 1.05rem;
+    line-height: 1.4;
+  }
+
+  .post-link {
+    color: var(--text-primary);
+    text-decoration: none;
+    &:hover { text-decoration: underline; }
+  }
+
+  .description {
+    margin-top: 0.2rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .meta {
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+  }
+</style>
