@@ -7,16 +7,18 @@ import { getLocaleFromUrl } from '../i18n/ui';
 interface Props {
   title: string;
   description: string;
-  image?: string;
+  // Link-preview image and, for posts, article details. See BaseHead.astro.
+  image?: { src: string; alt?: string; width?: number; height?: number };
+  article?: { published: Date; modified?: Date; authors: string[]; tags: string[] };
 }
 
-const { title, description, image } = Astro.props;
+const { title, description, image, article } = Astro.props;
 const locale = getLocaleFromUrl(Astro.url);
 ---
 
 <!doctype html>
 <html lang={locale === 'zh' ? 'zh-CN' : 'en'}>
-  <BaseHead title={title} description={description} image={image} lang={locale} />
+  <BaseHead title={title} description={description} image={image} article={article} lang={locale} />
   <body>
     <div class="util-bar" transition:animate="none">
       <LanguageToggle />
@@ -30,183 +32,544 @@ const locale = getLocaleFromUrl(Astro.url);
 </html>
 
 <script>
-  // Language switch morph animation.
+  // Language switch: character-level morph.
   //
-  // When the user clicks the EN/ZH toggle we intercept the navigation, morph
-  // every text element on the current page into its counterpart on the target
-  // page, then silently swap the DOM via View Transitions (skipping Astro's
-  // built-in fade so only our morph is visible). We also preserve scroll
-  // position, dark-mode state, and bio expand/collapse across the swap.
+  // Switching EN ⇄ 中文 doesn't cross-fade to the other page. Every piece of
+  // text on screen is rewritten in place — the new characters typed in from the
+  // left while the old ones are consumed — and only then is the DOM swapped for
+  // the real page. By that point the two look identical, so the swap itself is
+  // invisible.
+  //
+  // It hangs off Astro's client router rather than the click, so it also runs
+  // for keyboard activation and for Back / Forward between the two locales:
+  //
+  //   astro:before-preparation   wrap the loader: take the other page (already
+  //                              fetched on hover / focus), copy UI state into
+  //                              it, run the morph, hand it to the router
+  //   astro:before-swap          keep the theme, skip the router's own fade
+  //   astro:after-swap           put the reader back where they were
 
-  import { navigate } from 'astro:transitions/client';
+  const LOCALE_PREFIX = /^\/(en|zh)(?=\/|$)/;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-  // Character-level morph: eased left→right replacement with length
-  // interpolation. Cleaner than random scramble and reads well in CJK too.
-  function morphText(el: HTMLElement, newText: string, ms: number): Promise<void> {
-    const oldText = el.textContent || '';
-    if (oldText === newText) return Promise.resolve();
-    const t0 = performance.now();
+  /** The locale being switched to, if `from` → `to` is the same page in the other language. */
+  function localeSwitch(from: URL, to: URL): string | null {
+    const a = from.pathname.match(LOCALE_PREFIX);
+    const b = to.pathname.match(LOCALE_PREFIX);
+    if (!a || !b || a[1] === b[1]) return null;
+    return from.pathname.slice(a[0].length) === to.pathname.slice(b[0].length) ? b[1] : null;
+  }
 
-    return new Promise(resolve => {
-      (function frame() {
-        const p = Math.min((performance.now() - t0) / ms, 1);
-        // ease-in-out
-        const ep = p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
+  // ── Getting the other page early ────────────────────────────────
+  // Fetching on intent means the morph can start on the same frame as the click.
 
-        // Cursors through each text, moving at the eased rate
-        const newCursor = Math.floor(ep * newText.length);
-        const oldCursor = Math.floor(ep * oldText.length);
+  const PAGE_TTL = 5 * 60 * 1000;
+  const pages = new Map<string, { at: number; html: Promise<string | null> }>();
+  const parser = new DOMParser();
 
-        // New chars revealed on left + remaining old chars on right
-        el.textContent = newText.slice(0, newCursor) + oldText.slice(oldCursor);
+  function fetchPage(href: string): Promise<string | null> {
+    const hit = pages.get(href);
+    if (hit && performance.now() - hit.at < PAGE_TTL) return hit.html;
+    const html = fetch(href)
+      .then(res =>
+        res.ok && !res.redirected && /^text\/html\b/.test(res.headers.get('content-type') ?? '') ? res.text() : null,
+      )
+      .catch(() => null);
+    pages.set(href, { at: performance.now(), html });
+    html.then(text => {
+      if (text === null) pages.delete(href);
+    });
+    return html;
+  }
 
-        if (p < 1) requestAnimationFrame(frame);
-        else { el.textContent = newText; resolve(); }
-      })();
+  // Have the glyphs ready before they are typed, so the new text doesn't show
+  // up in a fallback face and re-flow a moment later.
+  function loadFontsFor(text: string): Promise<unknown> {
+    if (!document.fonts?.load || !text) return Promise.resolve();
+    const { fontFamily } = getComputedStyle(document.body);
+    return Promise.all([400, 700].map(weight => document.fonts.load(`${weight} 1em ${fontFamily}`, text))).catch(() => {});
+  }
+
+  function onIntent(e: Event) {
+    const link = (e.target as Element | null)?.closest?.<HTMLAnchorElement>('.lang-toggle a:not(.active)');
+    if (!link) return;
+    const hit = pages.get(link.href);
+    if (hit && performance.now() - hit.at < PAGE_TTL) return;
+    fetchPage(link.href).then(html => {
+      if (html) loadFontsFor(parser.parseFromString(html, 'text/html').querySelector('main')?.textContent ?? '');
     });
   }
 
-  // Find "leaf" text elements: those whose direct children contain no text.
-  // This gives us the innermost spans of text to morph, avoiding double-morph
-  // on containers. The util-bar and search island are excluded so they don't
-  // get scrambled during the animation.
-  function getLeafTextEls(root: Element): HTMLElement[] {
-    const all = root.querySelectorAll<HTMLElement>(
-      'h1, h2, h3, h4, h5, h6, p, a, span, time, button, li, figcaption, summary'
-    );
-    return Array.from(all).filter(el => {
-      if (!el.textContent?.trim()) return false;
-      if (el.closest('.util-bar, .search-island, script, style, noscript')) return false;
-      return !Array.from(el.children).some(c => c.textContent?.trim());
-    });
+  document.addEventListener('pointerover', onIntent, { passive: true });
+  document.addEventListener('touchstart', onIntent, { passive: true });
+  document.addEventListener('focusin', onIntent);
+
+  // ── Text streams ────────────────────────────────────────────────
+  // A morphing element holds two streams of content side by side: the incoming
+  // one (a copy of the element's content on the other page) and the outgoing
+  // one (what was already there). A stream is the element's text nodes in order;
+  // inline markup such as links stays intact around them, so a paragraph with a
+  // link in it morphs just like plain text. Non-text inlines (images, icons)
+  // count as a single cell and are shown or hidden whole. Boxes that would
+  // leave a hole if left standing empty (margin notes) are tracked as shells:
+  // present only while some of their text is.
+
+  interface Run {
+    start: number; // position in the stream, in cells
+    size: number; // cells in this run: graphemes for text, 1 for an atom
+    shown: number; // cells currently revealed (incoming) or consumed (outgoing)
+    node?: Text;
+    text?: string;
+    cuts?: number[]; // cuts[i] = string index where cell i begins
+    atom?: HTMLElement | SVGElement;
+    display?: string;
   }
 
-  // Structural DOM path (e.g. "ARTICLE[0]>DIV[1]>P[2]") used to pair up
-  // elements across the old and new pages. Index-based matching breaks when
-  // page structures differ slightly between locales.
-  function elPath(el: Element, root: Element): string {
-    const parts: string[] = [];
-    let cur: Element | null = el;
-    while (cur && cur !== root) {
-      const parent = cur.parentElement;
-      if (!parent) break;
-      const idx = Array.from(parent.children)
-        .filter(c => c.tagName === cur!.tagName)
-        .indexOf(cur);
-      parts.unshift(`${cur.tagName}[${idx}]`);
-      cur = parent;
-    }
-    return parts.join('>');
+  interface Shell {
+    el: HTMLElement;
+    start: number; // cells [start, end) of the stream sit inside this element
+    end: number;
+    visible: boolean;
+    display: string;
   }
 
-  // State that survives the view-transition swap. Set during the morph click
-  // handler, consumed after the new DOM is installed.
-  let skipTransition = false;
-  let savedScroll: number | null = null;
-  let bioWasExpanded = false;
+  interface Stream {
+    runs: Run[];
+    shells: Shell[];
+    size: number;
+  }
 
-  document.addEventListener('astro:before-swap', (e: any) => {
-    // Theme data-attribute would otherwise reset to whatever the new
-    // document was rendered with; copy it onto the incoming document.
-    const theme = document.documentElement.getAttribute('data-theme');
-    if (theme && e.newDocument) {
-      e.newDocument.documentElement.setAttribute('data-theme', theme);
-    }
-    // Make the post-morph navigation invisible (no cross-fade on top of morph).
-    if (skipTransition) {
-      e.viewTransition?.skipTransition?.();
-      skipTransition = false;
-    }
-  });
+  const ATOMS = 'img, svg, picture, video, audio, canvas, iframe, object, input, select, textarea, br, hr, math, astro-island, .katex';
+  const SHELLS = '.sidenote';
+  const segmenter = 'Segmenter' in Intl ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
 
-  // Restore scroll position and bio expand state after navigation finishes.
-  document.addEventListener('astro:page-load', () => {
-    if (savedScroll !== null) {
-      requestAnimationFrame(() => {
-        window.scrollTo(0, savedScroll!);
-        savedScroll = null;
+  // Split by grapheme so emoji and combining marks are never cut in half.
+  function graphemeCuts(text: string): number[] {
+    const cuts: number[] = [];
+    if (segmenter) {
+      for (const s of segmenter.segment(text)) cuts.push(s.index);
+    } else {
+      for (let i = 0; i < text.length; i += text.codePointAt(i)! > 0xffff ? 2 : 1) cuts.push(i);
+    }
+    return cuts;
+  }
+
+  function buildStream(root: Node, shown: boolean): Stream {
+    const runs: Run[] = [];
+    const shells: Shell[] = [];
+    let size = 0;
+    const visit = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = (node as Text).data;
+        if (!text) return;
+        const cuts = graphemeCuts(text);
+        runs.push({ start: size, size: cuts.length, shown: shown ? cuts.length : 0, node: node as Text, text, cuts });
+        size += cuts.length;
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.matches('script, style, template, [data-no-morph]')) return;
+        if (el.matches(ATOMS)) {
+          runs.push({ start: size, size: 1, shown: shown ? 1 : 0, atom: el, display: el.style.display });
+          size += 1;
+        } else if (el.matches(SHELLS)) {
+          const shell: Shell = { el, start: size, end: size, visible: true, display: el.style.display };
+          el.childNodes.forEach(visit);
+          shell.end = size;
+          shells.push(shell);
+        } else {
+          el.childNodes.forEach(visit);
+        }
+      }
+    };
+    root.childNodes.forEach(visit);
+    return { runs, shells, size };
+  }
+
+  /** Incoming stream: show its first `n` cells. Outgoing stream: hide its first `n` cells. */
+  function paint(stream: Stream, n: number, incoming: boolean) {
+    for (const run of stream.runs) {
+      const k = Math.min(Math.max(n - run.start, 0), run.size);
+      if (k === run.shown) continue;
+      run.shown = k;
+      if (run.node) {
+        const cut = k < run.size ? run.cuts![k] : run.text!.length;
+        run.node.data = incoming ? run.text!.slice(0, cut) : run.text!.slice(cut);
+      } else if (run.atom) {
+        run.atom.style.display = (incoming ? k > 0 : k === 0) ? run.display! : 'none';
+      }
+    }
+    for (const shell of stream.shells) {
+      const visible = incoming ? n > shell.start : n < shell.end;
+      if (visible === shell.visible) continue;
+      shell.visible = visible;
+      shell.el.style.display = visible ? shell.display : 'none';
+    }
+  }
+
+  // ── Pairing the two pages ───────────────────────────────────────
+
+  interface Unit {
+    el: HTMLElement;
+    target: Element;
+    incoming: Stream;
+    outgoing: Stream;
+    wrap: HTMLElement;
+    top: number;
+    h0: number;
+    h1: number;
+    lh0: number;
+    lh1: number;
+    block: boolean;
+    clip: boolean;
+    lockHeight: boolean;
+    lockLine: boolean;
+    restore: { height: string; lineHeight: string; overflowY: string };
+    delay: number;
+    duration: number;
+    progress: number;
+  }
+
+  const OPAQUE = 'script, style, noscript, template, svg, astro-island, astro-dev-toolbar, [data-no-morph]';
+
+  // What sits inside a closed <details> is laid out on demand when measured,
+  // so it reports a size and a position like anything else. Ask the browser
+  // whether it is actually rendered.
+  const folded = (el: Element) => typeof el.checkVisibility === 'function' && !el.checkVisibility();
+
+  const meaningful = (el: Element) =>
+    Array.from(el.childNodes).filter(n => n.nodeType === Node.ELEMENT_NODE || (n.nodeType === Node.TEXT_NODE && (n as Text).data.trim() !== ''));
+
+  // Walk both trees together. As long as two elements have the same element
+  // children and no text of their own we keep descending; the first level where
+  // that stops is the unit that gets morphed. So a heading, a paragraph (with
+  // any links inside it) or a single nav link each morph as one piece, and if
+  // the two pages disagree about structure somewhere, that whole container
+  // morphs as one piece instead of being left to snap.
+  function pairUnits(a: Element, b: Element, out: Array<{ el: HTMLElement; target: Element }>) {
+    if (a.matches(OPAQUE)) return;
+    const ka = meaningful(a);
+    const kb = meaningful(b);
+    const sameShape =
+      ka.length === kb.length &&
+      ka.every((n, i) => n.nodeType === Node.ELEMENT_NODE && kb[i].nodeType === Node.ELEMENT_NODE && (n as Element).tagName === (kb[i] as Element).tagName);
+    if (sameShape) {
+      ka.forEach((n, i) => pairUnits(n as Element, kb[i] as Element, out));
+    } else if (a.textContent !== b.textContent) {
+      out.push({ el: a as HTMLElement, target: b });
+    }
+  }
+
+  // ── The morph ───────────────────────────────────────────────────
+
+  const STAGGER = 140; // ms between the top-most and bottom-most element starting
+  const durationFor = (cells: number) => 420 + 220 * Math.min(1, cells / 320); // longer text gets a little more time
+  const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2); // ease-in-out cubic
+  const clipValue = CSS.supports('overflow', 'clip') ? 'clip' : 'hidden';
+
+  function morph(next: Document, signal: AbortSignal): Promise<void> {
+    const main = document.querySelector('main');
+    const nextMain = next.querySelector('main');
+    if (!main || !nextMain || document.hidden) return Promise.resolve();
+
+    const root = document.documentElement;
+    const fromLang = root.lang;
+    const toLang = next.documentElement.lang;
+
+    const pairs: Array<{ el: HTMLElement; target: Element }> = [];
+    pairUnits(main, nextMain, pairs);
+
+    // Read: where everything is now. Only what is on screen (or could scroll
+    // into view as the text above it shrinks) is animated; the rest is simply
+    // replaced by the swap.
+    const reach = window.innerHeight * 3;
+    const units: Unit[] = [];
+    for (const { el, target } of pairs) {
+      const rect = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      if (style.visibility === 'hidden' || (rect.width === 0 && rect.height === 0) || folded(el)) continue;
+      if (rect.bottom < 0 || rect.top > reach) continue;
+      const lineHeight = parseFloat(style.lineHeight);
+      units.push({
+        el,
+        target,
+        incoming: { runs: [], shells: [], size: 0 },
+        outgoing: { runs: [], shells: [], size: 0 },
+        wrap: document.createElement('span'),
+        top: rect.top,
+        h0: rect.height,
+        h1: rect.height,
+        lh0: lineHeight,
+        lh1: lineHeight,
+        block: !style.display.startsWith('inline') && style.display !== 'contents',
+        // Tight headings let glyphs hang outside the line box, and margin
+        // notes hang outside the paragraph altogether; don't crop those.
+        clip: lineHeight / parseFloat(style.fontSize) >= 1.35 && !el.querySelector(SHELLS),
+        lockHeight: false,
+        lockLine: false,
+        restore: { height: el.style.height, lineHeight: el.style.lineHeight, overflowY: el.style.overflowY },
+        delay: 0,
+        duration: 0,
+        progress: -1,
       });
     }
-    if (bioWasExpanded) {
-      const bw = document.getElementById('bio-wrap');
-      const bt = document.getElementById('bio-toggle');
-      if (bw && bt) {
-        bw.classList.add('expanded');
-        bt.textContent = bt.dataset.less!;
-      }
-      bioWasExpanded = false;
+    if (units.length === 0) return Promise.resolve();
+
+    // Measuring lays the whole page out once under the other language's rules.
+    // Text above the viewport re-wraps, the browser's scroll anchoring moves
+    // the scroll position to compensate, and it does not always move it back
+    // when the starting state returns. Note where the reader is.
+    const scrollTop = window.scrollY;
+
+    // Write: put each element into its finished state — incoming content in,
+    // outgoing content emptied, page language switched — so it can be measured.
+    for (const u of units) {
+      u.outgoing = buildStream(u.el, false);
+      u.wrap.style.display = 'contents';
+      u.wrap.dataset.morph = '';
+      u.wrap.lang = toLang; // typeset the incoming text by its own language's rules
+      for (const child of u.target.childNodes) u.wrap.appendChild(document.importNode(child, true));
+      u.wrap.querySelectorAll('script').forEach(s => s.remove());
+      u.el.insertBefore(u.wrap, u.el.firstChild);
+      u.incoming = buildStream(u.wrap, true);
+      paint(u.outgoing, u.outgoing.size, false);
     }
-  });
+    root.lang = toLang;
 
-  // The click handler must be re-installed after every view-transition swap
-  // so it binds to the new DOM. AbortController lets us remove the previous
-  // listener cleanly on each setup() call.
-  let ac: AbortController;
+    // Read: the finished size and leading.
+    for (const u of units) {
+      if (!u.block) continue;
+      u.h1 = u.el.getBoundingClientRect().height;
+      u.lh1 = parseFloat(getComputedStyle(u.el).lineHeight);
+    }
 
-  function setup() {
-    ac?.abort();
-    ac = new AbortController();
-
-    document.addEventListener('click', async (e) => {
-      const link = (e.target as Element)?.closest?.('.lang-toggle a:not(.active)') as HTMLAnchorElement | null;
-      if (!link) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      const href = link.getAttribute('href')!;
-
-      try {
-        const doc = new DOMParser().parseFromString(
-          await (await fetch(href)).text(), 'text/html'
-        );
-
-        // Build path→element map from current page
-        const oldEls = getLeafTextEls(document.body);
-        const oldMap = new Map<string, HTMLElement>();
-        for (const el of oldEls) oldMap.set(elPath(el, document.body), el);
-
-        // Match new page elements by structural path
-        const newEls = getLeafTextEls(doc.body);
-        const pairs: { el: HTMLElement; newText: string; top: number }[] = [];
-
-        for (const nel of newEls) {
-          const path = elPath(nel, doc.body);
-          const oel = oldMap.get(path);
-          if (!oel) continue;
-          const ot = oel.textContent ?? '';
-          const nt = nel.textContent ?? '';
-          if (ot !== nt) {
-            pairs.push({ el: oel, newText: nt, top: oel.getBoundingClientRect().top });
-          }
-        }
-
-        pairs.sort((a, b) => a.top - b.top);
-
-        const MORPH_MS = 450;
-        const STAGGER_MS = 150;
-
-        await Promise.all(pairs.map(({ el, newText }, i) =>
-          new Promise<void>(resolve => {
-            const delay = pairs.length > 1 ? (i / (pairs.length - 1)) * STAGGER_MS : 0;
-            setTimeout(() => morphText(el, newText, MORPH_MS).then(resolve), delay);
-          })
-        ));
-
-        // Preserve bio expanded state
-        bioWasExpanded = !!document.getElementById('bio-wrap')?.classList.contains('expanded');
-
-        savedScroll = window.scrollY;
-        skipTransition = true;
-        navigate(href);
-      } catch {
-        window.location.href = href;
+    // Write: back to the starting state, with height and leading pinned so they
+    // can glide to their finished values instead of jumping a line at a time.
+    root.lang = fromLang;
+    const first = units.reduce((min, u) => Math.min(min, u.top), Infinity);
+    for (const u of units) {
+      paint(u.incoming, 0, true);
+      paint(u.outgoing, 0, false);
+      u.lockHeight = u.block && Math.abs(u.h1 - u.h0) > 0.5;
+      u.lockLine = u.block && Math.abs(u.lh1 - u.lh0) > 0.01;
+      if (u.lockHeight) {
+        u.el.style.height = `${u.h0}px`;
+        if (u.clip) u.el.style.overflowY = clipValue;
       }
-    }, { capture: true, signal: ac.signal });
+      if (u.lockLine) u.el.style.lineHeight = `${u.lh0}px`;
+      u.delay = STAGGER * Math.min(1, Math.max(0, (u.top - first) / window.innerHeight));
+      u.duration = durationFor(Math.max(u.incoming.size, u.outgoing.size));
+    }
+    if (window.scrollY !== scrollTop) window.scrollTo({ top: scrollTop, behavior: 'instant' });
+
+    return new Promise(resolve => {
+      const t0 = performance.now();
+
+      const finish = () => {
+        // Switching the page's language re-wraps everything that was not
+        // morphed too, including the text above the viewport, which would
+        // slide what is on screen up or down. Hold on to the reader's place.
+        const place = findAnchor();
+        // Leave exactly what the other page contains.
+        for (const u of units) {
+          while (u.wrap.nextSibling) u.wrap.nextSibling.remove();
+          paint(u.incoming, u.incoming.size, true);
+          u.el.style.height = u.restore.height;
+          u.el.style.lineHeight = u.restore.lineHeight;
+          u.el.style.overflowY = u.restore.overflowY;
+        }
+        root.lang = toLang;
+        if (place) restoreAnchor(place);
+        resolve();
+      };
+
+      const frame = (now: number) => {
+        if (signal.aborted) return resolve(); // another navigation took over; it will replace the DOM
+        let running = false;
+        for (const u of units) {
+          const p = Math.min(Math.max((now - t0 - u.delay) / u.duration, 0), 1);
+          if (p < 1) running = true;
+          if (p === u.progress) continue;
+          u.progress = p;
+          const e = ease(p);
+          paint(u.incoming, Math.round(e * u.incoming.size), true);
+          paint(u.outgoing, Math.round(e * u.outgoing.size), false);
+          if (u.lockHeight) u.el.style.height = `${u.h0 + (u.h1 - u.h0) * e}px`;
+          if (u.lockLine) u.el.style.lineHeight = `${u.lh0 + (u.lh1 - u.lh0) * e}px`;
+        }
+        if (running) requestAnimationFrame(frame);
+        else finish();
+      };
+      requestAnimationFrame(frame);
+    });
   }
 
-  setup();
-  document.addEventListener('astro:after-swap', setup);
+  // Input placeholders aren't text nodes; give them the same left-to-right rewrite.
+  function morphPlaceholders(next: Document, signal: AbortSignal) {
+    const inputs = document.querySelectorAll<HTMLInputElement>('main input[placeholder]');
+    const targets = next.querySelectorAll<HTMLInputElement>('main input[placeholder]');
+    if (inputs.length !== targets.length) return;
+    inputs.forEach((input, i) => {
+      const from = input.placeholder;
+      const to = targets[i].placeholder;
+      if (from === to) return;
+      const fromCuts = graphemeCuts(from);
+      const toCuts = graphemeCuts(to);
+      const duration = durationFor(Math.max(fromCuts.length, toCuts.length));
+      const t0 = performance.now();
+      const frame = (now: number) => {
+        if (signal.aborted || !input.isConnected) return;
+        const p = Math.min((now - t0) / duration, 1);
+        const e = ease(p);
+        const a = Math.round(e * toCuts.length);
+        const b = Math.round(e * fromCuts.length);
+        input.placeholder = to.slice(0, a < toCuts.length ? toCuts[a] : to.length) + (b < fromCuts.length ? from.slice(fromCuts[b]) : '');
+        if (p < 1) requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    });
+  }
+
+  // ── Keeping the reader's place ──────────────────────────────────
+  // The two languages set to different heights, so "same scroll offset" is not
+  // "same place". Remember the first element in view and line it back up.
+
+  interface Anchor {
+    path: number[];
+    offset: number;
+  }
+
+  // Sticky or fixed elements (a table of contents riding along beside the
+  // text) are on screen wherever the reader is, so they say nothing about it.
+  function pinned(el: Element): boolean {
+    for (let node: Element | null = el; node && node !== document.body; node = node.parentElement) {
+      const { position } = getComputedStyle(node);
+      if (position === 'sticky' || position === 'fixed') return true;
+    }
+    return false;
+  }
+
+  function findAnchor(): Anchor | null {
+    if (window.scrollY === 0) return null;
+    const main = document.querySelector('main');
+    if (!main) return null;
+    // Prefer the first element that starts inside the viewport; one that only
+    // straddles its top edge is the fallback.
+    let straddling: { el: Element; top: number } | null = null;
+    let inView: { el: Element; top: number } | null = null;
+    for (const el of main.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, figure, pre, tr')) {
+      const rect = el.getBoundingClientRect();
+      if (rect.height === 0 || rect.bottom <= 0 || el.closest('[data-morph]') || pinned(el) || folded(el)) continue;
+      if (rect.top >= window.innerHeight) break;
+      if (rect.top >= 0) {
+        inView = { el, top: rect.top };
+        break;
+      }
+      straddling ??= { el, top: rect.top };
+    }
+    const found = inView ?? straddling;
+    if (!found) return null;
+    const path: number[] = [];
+    for (let node: Element = found.el; node !== document.body; node = node.parentElement!) {
+      path.unshift(Array.prototype.indexOf.call(node.parentElement!.children, node));
+    }
+    return { path, offset: found.top };
+  }
+
+  function restoreAnchor(anchor: Anchor) {
+    let el: Element | undefined = document.body;
+    for (const index of anchor.path) el = el?.children[index];
+    if (!el) return;
+    window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top - anchor.offset, behavior: 'instant' });
+  }
+
+  // ── Wiring into the router ──────────────────────────────────────
+
+  let switching: { href: string; keepPlace: boolean; anchor: Anchor | null; refocus: boolean } | null = null;
+
+  // Slide the toggle's thumb the moment the switch starts.
+  function markToggle(locale: string) {
+    const toggle = document.querySelector<HTMLElement>('.lang-toggle');
+    if (!toggle) return;
+    toggle.dataset.active = locale;
+    toggle.querySelectorAll('a').forEach(a => {
+      const active = a.dataset.locale === locale;
+      a.classList.toggle('active', active);
+      if (active) a.setAttribute('aria-current', 'true');
+      else a.removeAttribute('aria-current');
+    });
+  }
+
+  document.addEventListener('astro:before-preparation', e => {
+    switching = null;
+    const locale = localeSwitch(e.from, e.to);
+    if (!locale) return;
+
+    const href = e.to.href;
+    const refocus = !!document.activeElement?.closest('.lang-toggle');
+    markToggle(locale);
+
+    const load = e.loader;
+    e.loader = async () => {
+      // Use the page fetched on intent when we can; otherwise (nothing cached,
+      // or it needs stylesheets this page doesn't have) let the router load it.
+      const html = await fetchPage(href);
+      pages.delete(href);
+      const doc = html ? parser.parseFromString(html, 'text/html') : null;
+      const ready =
+        doc !== null &&
+        !!doc.querySelector('[name="astro-view-transitions-enabled"]') &&
+        Array.from(doc.querySelectorAll<HTMLLinkElement>('head link[rel=stylesheet]')).every(link =>
+          document.querySelector(`link[rel=stylesheet][href="${link.getAttribute('href')}"]`),
+        );
+      if (ready) {
+        doc.querySelectorAll('noscript').forEach(el => el.remove());
+        e.newDocument = doc;
+      } else {
+        await load();
+      }
+      if (e.defaultPrevented || e.signal.aborted) return;
+
+      const next = e.newDocument;
+      // Let components copy their open/closed state into the incoming page, so
+      // it arrives looking the way this one was left.
+      document.dispatchEvent(new CustomEvent('site:carry-state', { detail: { next } }));
+
+      // Back / Forward restore their own scroll position; a fresh switch keeps the reader's place.
+      switching = { href, keepPlace: e.navigationType !== 'traverse', anchor: null, refocus };
+      if (reducedMotion.matches) return;
+
+      await Promise.race([
+        loadFontsFor(next.querySelector('main')?.textContent ?? ''),
+        new Promise(resolve => setTimeout(resolve, 120)),
+      ]);
+      if (e.signal.aborted) return;
+      morphPlaceholders(next, e.signal);
+      await morph(next, e.signal);
+    };
+  });
+
+  document.addEventListener('astro:before-swap', e => {
+    // The theme lives on <html>, whose attributes are replaced by the swap.
+    const theme = document.documentElement.getAttribute('data-theme');
+    if (theme) e.newDocument.documentElement.setAttribute('data-theme', theme);
+    if (switching?.href !== e.to.href) return;
+    if (switching.keepPlace) switching.anchor = findAnchor();
+    // The page already reads as the new one; no fade on top of that. (Skipping
+    // rejects the transition's `ready` promise; that is expected, not an error.)
+    e.viewTransition?.ready.catch(() => {});
+    e.viewTransition?.skipTransition();
+  });
+
+  document.addEventListener('astro:after-swap', () => {
+    const done = switching;
+    switching = null;
+    if (!done || done.href !== location.href) return;
+    if (done.anchor) restoreAnchor(done.anchor);
+    if (done.refocus) document.querySelector<HTMLElement>('.lang-toggle a:not(.active)')?.focus({ preventScroll: true });
+  });
+
+  // The first-load entrance has played; drop the hook so nothing re-triggers it.
+  window.setTimeout(() => document.documentElement.classList.remove('intro'), 1600);
 </script>
 
 <style lang="scss">
@@ -215,20 +578,34 @@ const locale = getLocaleFromUrl(Astro.url);
   .util-bar {
     position: fixed;
     top: 0.75rem;
-    right: 1.5rem;
+    right: 0.75rem;
     z-index: 100;
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    background: var(--bg-primary);
-    padding: 0.35rem 0.75rem;
-    border-radius: 6px;
+    gap: 0.3rem;
+    padding: 0.2rem;
+    border-radius: 999px;
     border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+
+    // Frosted, so content scrolling underneath stays legible but visible.
+    @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+      background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
+      -webkit-backdrop-filter: blur(14px) saturate(1.6);
+      backdrop-filter: blur(14px) saturate(1.6);
+    }
+  }
+
+  @media (min-width: $small-device) {
+    .util-bar {
+      top: 1rem;
+      right: 1.25rem;
+    }
   }
 
   .util-sep {
     width: 1px;
-    height: 0.85rem;
+    height: 0.9rem;
     background: var(--border-color);
   }
 

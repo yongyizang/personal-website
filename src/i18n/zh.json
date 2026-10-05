@@ -1,4 +1,15 @@
 {
   "home.bioMore": "展开",
-  "home.bioLess": "收起"
+  "home.bioLess": "收起",
+  "home.links": "链接",
+  "blog.empty": "暂无文章。",
+  "post.back": "首页",
+  "post.contents": "目录",
+  "post.updated": "更新于",
+  "post.citation": "引用",
+  "post.citeAs": "引用本文请使用：",
+  "post.citeBibtex": "或使用 BibTeX：",
+  "post.copy": "复制",
+  "post.copied": "已复制",
+  "post.draft": "草稿"
 }

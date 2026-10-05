@@ -13,9 +13,10 @@ interface Props {
 
 const { locale } = Astro.props;
 
-// Blog posts filtered to the current locale.
+// Blog posts filtered to the current locale. Drafts are listed while running
+// `npm run dev` (so they can be previewed) and left out of the build.
 const allPosts = await getCollection('blog');
-const posts = allPosts.filter(p => p.data.lang === locale);
+const posts = allPosts.filter(p => p.data.lang === locale && (import.meta.env.DEV || !p.data.draft));
 
 // Bio is authored as MDX (src/content/bio/*.mdx) so it can contain links and
 // other markdown. Short is shown by default; long is revealed on toggle.
@@ -30,6 +31,10 @@ const { Content: LongBio } = await render(longBioEntry!);
 // change the home page content.
 const name = site.name[locale];
 const description = site.description[locale];
+
+// The newest entry is always visible; the rest unfold beneath it.
+const [latestNews, ...olderNews] = news;
+const isoDate = (date: string) => (/^\d{4}(-\d{2}){0,2}$/.test(date) ? date : undefined);
 ---
 
 <BaseLayout title={name} description={description}>
@@ -37,42 +42,66 @@ const description = site.description[locale];
     <header class="site-header">
       <div class="header-top">
         <div class="header-text">
-          <div class="header-name">
-            <img src={site.profileImage} alt={name} class="profile-photo profile-mobile" />
+          <div class="header-name reveal" style="--reveal-order: 0">
+            <img src={site.profileImage} alt={name} class="profile-photo profile-mobile" width="56" height="56" decoding="async" />
             <h1>{name}</h1>
           </div>
-          <div class="bio-wrap" id="bio-wrap">
-            <div class="bio bio-short" id="bio-short"><ShortBio /></div>
-            <div class="bio bio-long" id="bio-long"><LongBio /></div>
+          <div class="bio-wrap reveal" id="bio-wrap" style="--reveal-order: 1">
+            <div class="bio-row bio-row-short"><div class="bio bio-short" id="bio-short"><ShortBio /></div></div>
+            <div class="bio-row bio-row-long"><div class="bio bio-long" id="bio-long"><LongBio /></div></div>
             <button
-              class="bio-toggle" id="bio-toggle"
+              class="bio-toggle" id="bio-toggle" type="button"
+              aria-expanded="false" aria-controls="bio-long"
               data-more={t(locale, 'home.bioMore')}
               data-less={t(locale, 'home.bioLess')}
             >
-              {t(locale, 'home.bioMore')}
+              <span class="bio-toggle-label">{t(locale, 'home.bioMore')}</span>
+              <svg class="chevron" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>
             </button>
           </div>
-          <nav class="links">
+          <nav class="links reveal" style="--reveal-order: 2" aria-label={t(locale, 'home.links')}>
             {site.links.map(link => (
               <a href={link.url} target="_blank" rel="noopener">{link.label}</a>
             ))}
           </nav>
         </div>
-        <img src={site.profileImage} alt={name} class="profile-photo profile-desktop" />
+        <img src={site.profileImage} alt={name} class="profile-photo profile-desktop reveal" style="--reveal-order: 1" width="150" height="150" decoding="async" />
       </div>
     </header>
 
-    <div class="news-bar" id="news-bar">
-      <p class="news-latest" id="news-toggle">{news[0].date} — {news[0][locale]}</p>
-      <div class="news-all" id="news-all">
-        {news.slice(1).map(item => (
-          <p>{item.date} — {item[locale]}</p>
-        ))}
+    {latestNews && (
+      <div class="news reveal" id="news" style="--reveal-order: 3">
+        {olderNews.length > 0 ? (
+          <button class="news-item news-latest" id="news-toggle" type="button" aria-expanded="false" aria-controls="news-more">
+            <time datetime={isoDate(latestNews.date)}>{latestNews.date}</time>
+            <span class="news-text">{latestNews[locale]}</span>
+            <svg class="chevron" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>
+          </button>
+        ) : (
+          <p class="news-item news-latest">
+            <time datetime={isoDate(latestNews.date)}>{latestNews.date}</time>
+            <span class="news-text">{latestNews[locale]}</span>
+          </p>
+        )}
+        {olderNews.length > 0 && (
+          <div class="news-more" id="news-more">
+            <div class="news-clip">
+              <ul>
+                {olderNews.map(item => (
+                  <li class="news-item">
+                    <time datetime={isoDate(item.date)}>{item.date}</time>
+                    <span class="news-text">{item[locale]}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    )}
 
-    <section class="blog-section">
-      <SearchIsland client:idle locale={locale} />
+    <section class="blog-section reveal" style="--reveal-order: 4">
+      {posts.length > 0 && <SearchIsland client:idle locale={locale} />}
       <BlogList posts={posts} locale={locale} />
     </section>
   </div>
@@ -88,12 +117,13 @@ const description = site.description[locale];
   }
 
   .site-header {
-    padding: 3.5rem 0 1.5rem;
+    padding: 4.75rem 0 1.75rem;
   }
 
+  // Top-aligned, so the photo stays put while the bio unfolds beside it.
   .header-top {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
   }
 
   .header-text {
@@ -111,6 +141,7 @@ const description = site.description[locale];
     object-fit: cover;
     flex-shrink: 0;
     border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--border-color);
   }
 
   .profile-mobile {
@@ -122,11 +153,17 @@ const description = site.description[locale];
     display: none;
     width: 150px;
     height: 150px;
+    // Optically level with the cap height of the name.
+    margin-top: 0.35rem;
   }
 
   @media (min-width: $small-device) {
+    .site-header {
+      padding-top: clamp(4.75rem, 11vh, 6.5rem);
+    }
+
     .header-top {
-      gap: 2rem;
+      gap: 2.5rem;
     }
 
     .profile-mobile {
@@ -153,126 +190,257 @@ const description = site.description[locale];
     margin-top: 1rem;
   }
 
+  // Short and long bio each sit in a one-row grid whose row animates between
+  // 0fr and 1fr. As one closes the other opens, so the block's height glides
+  // from one text to the other with no measuring in script.
+  //
+  // The text stays visible while its row moves — unrolled as the block opens,
+  // rolled back up as it closes — so the fades are short and timed per direction.
+  //
+  // The row itself does the clipping. (Mid-transition a fractional track ends
+  // up shorter than its auto-sized grid, so clipping on the item instead would
+  // reveal the text more slowly than the block opens and leave a gap below it.)
+  .bio-row {
+    --bio-dur: 0.6s;
+    --bio-ease: cubic-bezier(0.32, 0.72, 0, 1);
+    display: grid;
+    overflow: hidden;
+    // A little room each side so focus rings on links aren't cropped.
+    padding-inline: 4px;
+    margin-inline: -4px;
+  }
+
+  .bio-row-short {
+    grid-template-rows: 1fr;
+    // Collapsing: the one-liner returns once the long text has mostly rolled up.
+    transition:
+      grid-template-rows var(--bio-dur) var(--bio-ease),
+      opacity 0.25s ease 0.12s,
+      visibility 0s;
+  }
+
+  .bio-row-long {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    // Also takes the hidden text (and its links) out of the tab order.
+    visibility: hidden;
+    // Collapsing: stay readable while rolling up, fade out near the end.
+    transition:
+      grid-template-rows var(--bio-dur) var(--bio-ease),
+      opacity 0.2s ease 0.14s,
+      visibility 0s linear var(--bio-dur);
+  }
+
+  .bio-wrap.expanded .bio-row-short {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    visibility: hidden;
+    // Expanding: the one-liner gets out of the way at once.
+    transition:
+      grid-template-rows var(--bio-dur) var(--bio-ease),
+      opacity 0.1s ease,
+      visibility 0s linear var(--bio-dur);
+  }
+
+  .bio-wrap.expanded .bio-row-long {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    // Expanding: the long text is there from the first frame, unrolling downward.
+    transition:
+      grid-template-rows var(--bio-dur) var(--bio-ease),
+      opacity 0.18s ease,
+      visibility 0s;
+  }
+
   .bio {
-    font-size: 1.05rem;
-    line-height: 1.6;
+    min-height: 0;
+    font-size: 1.0625rem;
+    line-height: 1.65;
     color: var(--text-secondary);
-    margin: 0;
 
     :global(p) { margin: 0; }
+    :global(p + p) { margin-top: 0.85em; }
     :global(a) {
-      color: var(--text-secondary);
+      color: inherit;
       text-decoration: underline;
-      text-underline-offset: 2px;
-      transition: color 0.15s;
-      &:hover { color: var(--text-primary); }
+      text-decoration-color: var(--text-tertiary);
+      text-underline-offset: 0.18em;
+      transition: color var(--dur-fast) ease, text-decoration-color var(--dur-fast) ease;
+      &:hover {
+        color: var(--text-primary);
+        text-decoration-color: currentColor;
+      }
     }
   }
 
-  .bio-long {
-    display: none;
-  }
-
-  .bio-wrap.expanded .bio-short {
-    display: none;
-  }
-
-  .bio-wrap.expanded .bio-long {
-    display: block;
+  .chevron {
+    flex-shrink: 0;
+    transition: transform var(--dur-base) var(--ease-out);
   }
 
   .bio-toggle {
-    display: inline-block;
-    margin-top: 0.4rem;
-    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.3rem;
+    padding: 0.25rem 0;
     border: none;
     background: none;
-    font-family: inherit;
+    font: inherit;
     font-size: 0.85rem;
+    line-height: 1.2;
     color: var(--text-tertiary);
     cursor: pointer;
-    transition: color 0.15s;
+    transition: color var(--dur-fast) ease;
 
     &:hover {
       color: var(--text-primary);
     }
   }
 
+  .bio-wrap.expanded .bio-toggle .chevron {
+    transform: rotate(180deg);
+  }
+
   .links {
-    margin-top: 1rem;
+    margin-top: 0.85rem;
     display: flex;
-    gap: 1.25rem;
+    flex-wrap: wrap;
+    gap: 0.35rem 1.25rem;
     font-size: 0.9rem;
 
     a {
       color: var(--text-secondary);
-      text-decoration: none;
-      transition: color 0.15s;
+      @include link-underline;
       &:hover { color: var(--text-primary); }
     }
   }
 
-  .news-bar {
-    margin-top: 0.75rem;
+  .news {
+    padding-bottom: 1.4rem;
   }
 
-  .news-latest {
-    font-size: 0.85rem;
-    color: var(--text-tertiary);
+  .news-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 0.85rem;
+    align-items: baseline;
     margin: 0;
-    line-height: 1.5;
-    cursor: pointer;
-    transition: color 0.15s;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: var(--text-secondary);
 
-    &:hover {
-      color: var(--text-secondary);
+    time {
+      color: var(--text-tertiary);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
   }
 
-  .news-all {
-    max-height: 0;
+  button.news-latest {
+    grid-template-columns: auto 1fr auto;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: color var(--dur-fast) ease;
+
+    .chevron {
+      align-self: center;
+      color: var(--text-tertiary);
+    }
+
+    &:hover {
+      color: var(--text-primary);
+    }
+  }
+
+  .news.expanded button.news-latest .chevron {
+    transform: rotate(180deg);
+  }
+
+  // Same 0fr → 1fr row as the bio.
+  .news-more {
+    display: grid;
     overflow: hidden;
-    transition: max-height 0.3s ease;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      grid-template-rows var(--dur-slow) var(--ease-out),
+      opacity var(--dur-fast) ease,
+      visibility 0s linear var(--dur-slow);
+
+    .news-clip {
+      min-height: 0;
+    }
+
+    // A long history scrolls inside its own box rather than pushing the posts away.
+    ul {
+      max-height: 14rem;
+      overflow-y: auto;
+      list-style: none;
+    }
+
+    li {
+      margin-top: 0.3rem;
+    }
   }
 
-  .news-bar.expanded .news-all {
-    max-height: 12rem;
-    overflow-y: auto;
-  }
-
-  .news-all p {
-    font-size: 0.85rem;
-    color: var(--text-tertiary);
-    line-height: 1.5;
-    margin: 0.2rem 0;
+  .news.expanded .news-more {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    transition:
+      grid-template-rows var(--dur-slow) var(--ease-out),
+      opacity var(--dur-base) ease var(--dur-fast),
+      visibility 0s;
   }
 
   .blog-section {
-    padding: 1.25rem 0 4rem;
+    padding: 1.5rem 0 5rem;
     border-top: 1px solid var(--border-color);
   }
 </style>
 
 <script>
-  function initIndex() {
-    const bioWrap = document.getElementById('bio-wrap');
-    const bioToggle = document.getElementById('bio-toggle');
-    if (bioWrap && bioToggle) {
-      bioToggle.addEventListener('click', () => {
-        const isExpanded = bioWrap.classList.toggle('expanded');
-        bioToggle.textContent = isExpanded ? bioToggle.dataset.less! : bioToggle.dataset.more!;
-      });
-    }
-
-    const newsBar = document.getElementById('news-bar');
-    const newsToggle2 = document.getElementById('news-toggle');
-    if (newsBar && newsToggle2) {
-      newsToggle2.addEventListener('click', () => {
-        newsBar.classList.toggle('expanded');
-      });
-    }
+  // Open/closed state goes through these two functions, which work on any
+  // document: this page on a click, and the incoming page on a language switch
+  // (so it arrives already looking the way this one was left).
+  function setBio(doc: Document, expanded: boolean) {
+    const wrap = doc.getElementById('bio-wrap');
+    const toggle = doc.getElementById('bio-toggle');
+    if (!wrap || !toggle) return;
+    wrap.classList.toggle('expanded', expanded);
+    toggle.setAttribute('aria-expanded', String(expanded));
+    const label = toggle.querySelector('.bio-toggle-label');
+    if (label) label.textContent = (expanded ? toggle.dataset.less : toggle.dataset.more) ?? '';
   }
 
-  initIndex();
-  document.addEventListener('astro:after-swap', initIndex);
+  function setNews(doc: Document, expanded: boolean) {
+    const news = doc.getElementById('news');
+    const toggle = doc.getElementById('news-toggle');
+    if (!news || !toggle) return;
+    news.classList.toggle('expanded', expanded);
+    toggle.setAttribute('aria-expanded', String(expanded));
+  }
+
+  const isOpen = (id: string) => !!document.getElementById(id)?.classList.contains('expanded');
+
+  // Delegated from the document, so the handlers survive view-transition swaps.
+  document.addEventListener('click', e => {
+    const target = e.target as Element | null;
+    if (target?.closest?.('#bio-toggle')) setBio(document, !isOpen('bio-wrap'));
+    else if (target?.closest?.('#news-toggle')) setNews(document, !isOpen('news'));
+  });
+
+  document.addEventListener('site:carry-state', e => {
+    const { next } = (e as CustomEvent<{ next: Document }>).detail;
+    setBio(next, isOpen('bio-wrap'));
+    setNews(next, isOpen('news'));
+  });
 </script>

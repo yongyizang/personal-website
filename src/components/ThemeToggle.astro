@@ -1,56 +1,126 @@
 ---
 ---
 
-<span class="theme-toggle" id="theme-toggle">
-  <button data-theme-value="light" class="opt" aria-label="Light mode">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+<span class="theme-toggle" id="theme-toggle" role="group" aria-label="Theme">
+  <button data-theme-value="light" class="opt" type="button" aria-label="Light mode">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
   </button>
-  <button data-theme-value="dark" class="opt" aria-label="Dark mode">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  <button data-theme-value="dark" class="opt" type="button" aria-label="Dark mode">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
   </button>
 </span>
 
 <style>
+  /* Which icon is lit and where the thumb sits come from the theme tokens
+     (--theme-thumb / --theme-sun / --theme-moon in styles/_dark-mode.scss), so
+     the control is correct on first paint, before any script has run. */
   .theme-toggle {
-    display: flex;
+    position: relative;
+    display: inline-grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
     align-items: center;
-    gap: 0.35rem;
+  }
+
+  .theme-toggle::before {
+    content: '';
+    position: absolute;
+    inset: 0 50% 0 0;
+    border-radius: 999px;
+    background: var(--hover-bg);
+    transform: translateX(calc(var(--theme-thumb) * 100%));
+    transition: transform var(--dur-base) var(--ease-out);
   }
 
   .opt {
-    background: none;
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
     border: none;
-    padding: 0.15rem;
+    border-radius: 999px;
+    background: none;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    color: var(--text-tertiary);
-    transition: color 0.15s;
+    transition: color var(--dur-fast) ease;
+
+    &[data-theme-value="light"] { color: var(--theme-sun); }
+    &[data-theme-value="dark"] { color: var(--theme-moon); }
     &:hover { color: var(--text-primary); }
-    &.active {
-      color: var(--text-primary);
-      cursor: default;
-    }
+    &[aria-pressed="true"] { cursor: default; }
+    &:focus-visible { outline-offset: 1px; }
+  }
+
+  svg {
+    display: block;
   }
 </style>
 
 <script>
-  function initThemeToggle() {
-    const theme = document.documentElement.getAttribute('data-theme')
-      || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const root = document.documentElement;
+  const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  const currentTheme = () => root.getAttribute('data-theme') || (systemDark.matches ? 'dark' : 'light');
+
+  // Reflect the active theme for assistive tech and tint the browser chrome.
+  function sync() {
+    const theme = currentTheme();
     document.querySelectorAll('#theme-toggle .opt').forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-theme-value') === theme);
-      btn.addEventListener('click', () => {
-        const val = btn.getAttribute('data-theme-value')!;
-        document.documentElement.setAttribute('data-theme', val);
-        localStorage.setItem('theme', val);
-        document.querySelectorAll('#theme-toggle .opt').forEach(b => {
-          b.classList.toggle('active', b.getAttribute('data-theme-value') === val);
-        });
-      });
+      btn.setAttribute('aria-pressed', String(btn.getAttribute('data-theme-value') === theme));
     });
+    if (root.hasAttribute('data-theme')) {
+      const bg = getComputedStyle(root).getPropertyValue('--bg-primary').trim();
+      if (bg) document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', bg));
+    }
   }
 
-  initThemeToggle();
-  document.addEventListener('astro:after-swap', initThemeToggle);
+  function setTheme(theme: string, x: number, y: number) {
+    if (theme === currentTheme()) return;
+
+    const apply = () => {
+      root.setAttribute('data-theme', theme);
+      try { localStorage.setItem('theme', theme); } catch {}
+      sync();
+    };
+
+    if (reducedMotion.matches) {
+      apply();
+      return;
+    }
+
+    if (!document.startViewTransition) {
+      root.classList.add('theme-fade');
+      apply();
+      window.setTimeout(() => root.classList.remove('theme-fade'), 320);
+      return;
+    }
+
+    // Reveal the new theme through a circle growing from the toggle.
+    root.setAttribute('data-theme-switching', '');
+    const transition = document.startViewTransition(apply);
+    transition.ready
+      .then(() => {
+        const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+        root.animate(
+          { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+          { duration: 620, easing: 'cubic-bezier(0.45, 0, 0.15, 1)', pseudoElement: '::view-transition-new(root)' },
+        );
+      })
+      .catch(() => {});
+    transition.finished.finally(() => root.removeAttribute('data-theme-switching'));
+  }
+
+  // Delegated, so it keeps working after view-transition swaps replace the toggle.
+  document.addEventListener('click', e => {
+    const btn = (e.target as Element | null)?.closest?.('#theme-toggle .opt');
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    setTheme(btn.getAttribute('data-theme-value')!, rect.left + rect.width / 2, rect.top + rect.height / 2);
+  });
+
+  systemDark.addEventListener('change', sync);
+  document.addEventListener('astro:after-swap', sync);
+  sync();
 </script>

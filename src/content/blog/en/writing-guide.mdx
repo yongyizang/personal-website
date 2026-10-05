@@ -1,0 +1,153 @@
+---
+title: "Writing guide"
+description: "Everything a post on this site can do, written in plain Markdown."
+date: 2026-10-04
+tags: ["meta"]
+lang: "en"
+slug: "writing-guide"
+translationOf: "writing-guide"
+draft: true
+citation: true
+authors:
+  - name: Yongyi Zang
+    url: https://yongyi.dev
+bibliography:
+  - key: hu2021lora
+    title: "LoRA: Low-Rank Adaptation of Large Language Models"
+    authors: "Hu, Shen, Wallis, et al."
+    venue: "ICLR"
+    year: 2022
+    url: https://arxiv.org/abs/2106.09685
+  - key: vaswani2017attention
+    title: "Attention Is All You Need"
+    authors: "Vaswani, Shazeer, Parmar, et al."
+    venue: "NeurIPS"
+    year: 2017
+    url: https://arxiv.org/abs/1706.03762
+  - key: tufte2006beautiful
+    title: "Beautiful Evidence"
+    authors: "Edward R. Tufte"
+    venue: "Graphics Press"
+    year: 2006
+---
+
+This page is a draft: it appears while running `npm run dev` and is left out of the published site. It shows everything a post can use. All of it is ordinary Markdown, with no imports and no components.
+
+## Notes in the margin
+
+A footnote is written the usual way, with a marker in the text and the note anywhere below.[^margin] On a wide screen the note stands in the margin, level with its marker. On a phone the marker becomes a button that unfolds the note in place.
+
+Notes can carry **emphasis**, `code` and links, and a second one nearby simply stacks under the first.[^stack]
+
+[^margin]: Like this one. A margin note keeps the eye on the page instead of sending it to the bottom and back, a habit borrowed from Tufte's books [@tufte2006beautiful].
+
+[^stack]: Written as `[^stack]` in the text and `[^stack]: …` on its own line.
+
+## Citations
+
+Sources are listed once, in the `bibliography` of the frontmatter, and cited by key: low-rank adaptation [@hu2021lora] builds on the Transformer [@vaswani2017attention]. Several keys can share one marker [@hu2021lora; @tufte2006beautiful].
+
+The first time a work is cited its details appear in the margin. Later citations show only the number, which opens the reference when clicked. A numbered reference list is added to the end of the post automatically.
+
+## Tables
+
+| Method | Trainable parameters | Accuracy |
+| :-- | --: | --: |
+| Full fine-tuning | 100% | 91.2 |
+| LoRA, rank 8 | 0.24% | 90.8 |
+| LoRA, rank 64 | 1.9% | 91.1 |
+
+Table 1: A paragraph directly under a table that begins with "Table 1:" becomes its caption. The numbers are invented for this example.
+
+Wide tables scroll sideways on small screens instead of breaking the page.
+
+## Figures
+
+![Two curves that rise and flatten out](../assets/writing-guide-figure.svg "Figure 1: An image with a title becomes a captioned figure. A paragraph under the image that begins with “Figure 1:” works too.")
+
+## Code
+
+Fenced code gets syntax colours for both themes, a language label and a copy button.
+
+```python
+def lora_update(W, A, B, scale):
+    """Low-rank update: W' = W + scale * B @ A."""
+    return W + scale * (B @ A)
+```
+
+## Math
+
+Formulas are written in LaTeX. Inline math such as $W' = W + \gamma BA$ sits in the line, and display math gets a line of its own:
+
+$$
+\mathcal{L}(\theta) = -\frac{1}{N} \sum_{i=1}^{N} \log p_\theta(y_i \mid x_i)
+$$
+
+Environments work as they do in LaTeX. `align` and `equation` number themselves, and `\tag` sets a label by hand:
+
+$$
+\begin{align}
+h &= W_0 x + \Delta W x \\
+  &= W_0 x + \frac{\alpha}{r} B A x
+\end{align}
+$$
+
+$$
+\operatorname{softmax}(z)_i = \frac{e^{z_i}}{\sum_j e^{z_j}} \tag{$\star$}
+$$
+
+Matrices and cases:
+
+$$
+A = \begin{bmatrix} a_{11} & a_{12} \\ a_{21} & a_{22} \end{bmatrix},
+\qquad
+f(x) = \begin{cases} x & x \ge 0 \\ \alpha x & x < 0 \end{cases}
+$$
+
+Math also works inside notes[^math] and tables. Copying a formula from the page gives its LaTeX source.
+
+[^math]: For example $\lVert \Delta W \rVert_F \le \epsilon$, set in the margin.
+
+## Foldable blocks
+
+Material that not every reader needs, such as a derivation, a proof or a long aside, can be folded away behind its title and opened with a click. It is written with HTML's own `<details>`, with a blank line between the tags and the text:
+
+```html
+<details>
+<summary>Title</summary>
+
+Text, math, tables, code…
+
+</details>
+```
+
+<details>
+<summary>Derivation: why the mean minimises squared error</summary>
+
+Let $f(c) = \sum_{i=1}^{n} (x_i - c)^2$. Differentiate with respect to $c$ and set the derivative to zero:
+
+$$
+f'(c) = -2 \sum_{i=1}^{n} (x_i - c) = 0
+\quad\Longrightarrow\quad
+c = \frac{1}{n} \sum_{i=1}^{n} x_i . \tag{1}
+$$
+
+Notes and citations inside a folded block stay out of the margin and open in place when their marker is clicked.[^fold]
+
+</details>
+
+[^fold]: Like this.
+
+## Quotes and lists
+
+> A quoted passage is set off with a rule and a quieter colour.
+
+1. Numbered lists
+2. keep their numbers,
+
+- and bulleted lists
+- keep their bullets.
+
+## The citation block
+
+Setting `citation: true` in the frontmatter adds the section below, with the post's details in plain text and BibTeX.

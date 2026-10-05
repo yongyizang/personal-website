@@ -6,7 +6,7 @@ interface Props {
 const { id } = Astro.props;
 ---
 
-<span class="cite-wrapper"><a href={`#ref-${id}`} class="citation" role="doc-noteref"><sup>[<span class="cite-key" data-cite={id}></span>]</sup></a><span class="cite-tooltip" data-cite-tooltip={id}></span></span>
+<span class="cite-wrapper"><a href={`#ref-${id}`} class="citation" role="doc-noteref"><sup>[<span class="cite-key" data-cite={id}></span>]</sup></a><span class="cite-tooltip" data-cite-tooltip={id} data-no-morph></span></span>
 
 <style>
   .cite-wrapper {
@@ -19,6 +19,7 @@ const { id } = Astro.props;
     text-decoration: none;
     color: var(--text-secondary);
     cursor: pointer;
+    transition: color var(--dur-fast) ease;
     &:hover { color: var(--text-primary); }
   }
 
@@ -31,11 +32,16 @@ const { id } = Astro.props;
   }
 
   .cite-tooltip {
-    display: none;
+    opacity: 0;
+    visibility: hidden;
     position: absolute;
     bottom: 1.2em;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translate(-50%, 4px);
+    transition:
+      opacity var(--dur-fast) ease,
+      transform var(--dur-fast) var(--ease-out),
+      visibility 0s linear var(--dur-fast);
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: 4px;
@@ -47,11 +53,15 @@ const { id } = Astro.props;
     width: max-content;
     max-width: 360px;
     z-index: 50;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-soft);
     pointer-events: none;
   }
 
-  .cite-wrapper:hover .cite-tooltip {
-    display: block;
+  .cite-wrapper:hover .cite-tooltip,
+  .cite-wrapper:focus-within .cite-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+    transition-delay: 0s;
   }
 </style>

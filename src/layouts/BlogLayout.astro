@@ -1,6 +1,12 @@
 ---
+import 'katex/dist/katex.min.css';
+import '../styles/prose.scss';
+import { Image, getImage } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
 import BaseLayout from './BaseLayout.astro';
-import { getLocaleFromUrl } from '../i18n/ui';
+import CopyBlock from '../components/blog/CopyBlock.astro';
+import { getLocaleFromUrl, t } from '../i18n/ui';
+import { site } from '../lib/site';
 
 interface Author {
   name: string;
@@ -11,6 +17,7 @@ interface Author {
 interface Props {
   title: string;
   description: string;
+  cover?: { src: ImageMetadata; alt: string };
   date: Date;
   updated?: Date;
   authors?: Author[];
@@ -18,102 +25,189 @@ interface Props {
   translationOf?: string;
   headings?: { depth: number; slug: string; text: string }[];
   toc?: boolean;
+  slug: string;
+  citation?: boolean;
 }
 
-const { title, description, date, updated, authors = [], tags, translationOf, headings = [], toc = true } = Astro.props;
+const { title, description, cover, date, updated, authors = [], tags = [], headings = [], toc = true, slug, citation = false } = Astro.props;
 const locale = getLocaleFromUrl(Astro.url);
 
+// Link-preview image. 1200 × 630 is the shape X and LinkedIn lay their large
+// card out for; WeChat keeps only the middle square, so a cover should not
+// depend on what is at its far left and right.
+const SHARE_WIDTH = 1200;
+const SHARE_HEIGHT = 630;
+const shareImage = cover
+  ? await getImage({ src: cover.src, width: SHARE_WIDTH, height: SHARE_HEIGHT, fit: 'cover', format: 'png' })
+  : undefined;
+
+// Frontmatter dates are calendar days (parsed as UTC midnight); format them in
+// UTC so they don't slip a day depending on where the site is built.
+const formatDate = (d: Date) =>
+  d.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+
+// ── "Cite this post" ──────────────────────────────────────────────
+const postUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url).href;
+const siteName = new URL(postUrl).host;
+const citeAuthors = authors.length > 0 ? authors.map(a => a.name) : [site.name[locale]];
+// BibTeX sorts and abbreviates names, so the site's author goes in romanised.
+const bibAuthors = authors.length > 0 ? authors.map(a => a.name) : [site.name.en];
+const year = date.getUTCFullYear();
+const month = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'][date.getUTCMonth()];
+const monthYear = date.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'short', timeZone: 'UTC' });
+const ascii = (s: string) => s.normalize('NFKD').replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+const surname = (name: string) => ascii(name.trim().split(/\s+/).pop() ?? '');
+// Key: surname, year, then the first few whole words of the slug (about 20 characters).
+let slugWords = '';
+for (const word of slug.split(/[^A-Za-z0-9]+/).filter(Boolean)) {
+  if (slugWords.length + word.length > 20) break;
+  slugWords += word.toLowerCase();
+}
+const bibKey = `${surname(bibAuthors[0]) || surname(site.name.en) || 'post'}${year}${slugWords || ascii(slug).slice(0, 20)}`;
+const plainCitation = `${citeAuthors.join(', ')}. "${title}". ${siteName}, ${monthYear}. ${postUrl}`;
+const bibtex = [
+  `@misc{${bibKey},`,
+  `  author = {${bibAuthors.join(' and ')}},`,
+  `  title  = {${title}},`,
+  `  year   = {${year}},`,
+  `  month  = {${month}},`,
+  `  url    = {${postUrl}},`,
+  `}`,
+].join('\n');
+
+// ── Table of contents ─────────────────────────────────────────────
 const tocHeadings = headings.filter(h => h.depth === 2 || h.depth === 3);
+if (citation) tocHeadings.push({ depth: 2, slug: 'citation', text: t(locale, 'post.citation') });
 const showToc = toc && tocHeadings.length >= 3;
 ---
 
-<BaseLayout title={title} description={description}>
-  <article class:list={['post-wrap', { 'has-toc': showToc }]}>
-    <a href={`/${locale}/`} class="back">&larr; {locale === 'zh' ? '首页' : 'home'}</a>
-
-    <header class="d-title">
-      <h1>{title}</h1>
-      {description && <p class="subtitle">{description}</p>}
-    </header>
-
-    <div class="d-byline">
-      {authors.length > 0 && (
-        <div class="byline-field">
-          <h3>{locale === 'zh' ? '作者' : 'Authors'}</h3>
-          <p class="byline-authors">
+<BaseLayout
+  title={title}
+  description={description}
+  image={shareImage && { src: shareImage.src, alt: cover?.alt, width: SHARE_WIDTH, height: SHARE_HEIGHT }}
+  article={{ published: date, modified: updated, authors: citeAuthors, tags }}
+>
+  <article class:list={['post', { 'has-toc': showToc }]}>
+    <header class="post-header">
+      <a href={`/${locale}/`} class="back reveal" style="--reveal-order: 0"><span class="back-arrow" aria-hidden="true">&larr;</span> <span>{t(locale, 'post.back')}</span></a>
+      <h1 class="reveal" style="--reveal-order: 1" transition:name={`post-title-${slug}`}>{title}</h1>
+      {description && <p class="subtitle reveal" style="--reveal-order: 2">{description}</p>}
+      <div class="post-meta reveal" style="--reveal-order: 3">
+        {authors.length > 0 && (
+          <span class="meta-authors">
             {authors.map((a, i) => (
               <>
-                {a.url ? (
-                  <a href={a.url} target="_blank" rel="noopener" class="author-link">
-                    {a.name}{a.affiliation && <span class="affiliation"> ({a.affiliation})</span>}
-                  </a>
-                ) : (
-                  <span>
-                    {a.name}{a.affiliation && <span class="affiliation"> ({a.affiliation})</span>}
-                  </span>
-                )}
+                {a.url ? <a href={a.url} target="_blank" rel="noopener">{a.name}</a> : <span>{a.name}</span>}
+                {a.affiliation && <span class="affiliation"> ({a.affiliation})</span>}
                 {i < authors.length - 1 && ', '}
               </>
             ))}
-          </p>
+          </span>
+        )}
+        <time datetime={date.toISOString()}>{formatDate(date)}</time>
+        {updated && (
+          <span class="meta-updated">{t(locale, 'post.updated')} <time datetime={updated.toISOString()}>{formatDate(updated)}</time></span>
+        )}
+      </div>
+      {cover && (
+        <div class="post-cover reveal" style="--reveal-order: 4">
+          <Image
+            src={cover.src}
+            alt={cover.alt}
+            widths={[680, 1360]}
+            sizes="(max-width: 767px) calc(100vw - 3rem), 680px"
+            format="webp"
+            loading="eager"
+            fetchpriority="high"
+          />
         </div>
       )}
-      <div class="byline-field">
-        <h3>{locale === 'zh' ? '发布日期' : 'Published'}</h3>
-        <p>
-          <time datetime={date.toISOString()}>
-            {date.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-          </time>
-        </p>
-      </div>
-      {updated && (
-        <div class="byline-field">
-          <h3>{locale === 'zh' ? '更新日期' : 'Updated'}</h3>
-          <p>
-            <time datetime={updated.toISOString()}>
-              {updated.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-            </time>
-          </p>
-        </div>
+    </header>
+
+    {showToc && (
+      <aside class="toc reveal" id="toc" style="--reveal-order: 4">
+        <nav aria-label={t(locale, 'post.contents')}>
+          <p class="toc-title">{t(locale, 'post.contents')}</p>
+          <ul class="toc-list">
+            {tocHeadings.map(h => (
+              <li class:list={[`depth-${h.depth}`]}>
+                <a href={`#${h.slug}`}>{h.text}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </aside>
+    )}
+
+    <div class="post-content prose reveal" style="--reveal-order: 4">
+      <slot />
+
+      {citation && (
+        <section class="cite-this">
+          <h2 id="citation">{t(locale, 'post.citation')}</h2>
+          <p>{t(locale, 'post.citeAs')}</p>
+          <CopyBlock text={plainCitation} copyLabel={t(locale, 'post.copy')} copiedLabel={t(locale, 'post.copied')} />
+          <p>{t(locale, 'post.citeBibtex')}</p>
+          <CopyBlock text={bibtex} lang="bibtex" copyLabel={t(locale, 'post.copy')} copiedLabel={t(locale, 'post.copied')} />
+        </section>
       )}
     </div>
 
-    <div class="post-body">
-      {showToc && (
-        <aside class="toc" id="toc">
-          <nav>
-            <h3>{locale === 'zh' ? '目录' : 'Contents'}</h3>
-            <ul>
-              {tocHeadings.map(h => (
-                <li class:list={[`depth-${h.depth}`]}>
-                  <a href={`#${h.slug}`}>{h.text}</a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        </aside>
-      )}
-
-      <div class="post-content">
-        <slot />
-      </div>
-    </div>
-
+    <footer class="post-footer">
+      <a href={`/${locale}/`} class="back"><span class="back-arrow" aria-hidden="true">&larr;</span> <span>{t(locale, 'post.back')}</span></a>
+    </footer>
   </article>
 </BaseLayout>
 
 <style lang="scss">
   @use '../styles/variables' as *;
 
-  .post-wrap {
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 2rem 1.5rem 4rem;
+  // One centred text column. Margin notes hang off its right edge and, when
+  // there is room, the table of contents sits to its left.
+  .post {
+    --measure: 42.5rem;
+    --note-width: 17.5rem;
+    --note-gap: 2.5rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, var(--measure)) minmax(0, 1fr);
+    padding: 0 1.5rem 6rem;
+
+    > * {
+      grid-column: 2;
+      min-width: 0;
+    }
   }
 
-  /* ── When TOC is present, widen and use grid ── */
-  .post-wrap.has-toc {
-    max-width: 1080px;
+  // (Between 1100px and 1400px a post with notes shifts left to make room for
+  // them; that rule depends on the post's content, so it lives in prose.scss.)
+
+  @media (min-width: 1400px) {
+    // Wide enough to centre the text itself, with contents left and notes right.
+    .post-header { grid-row: 1; }
+    .post-content { grid-row: 2; }
+    .post-footer { grid-row: 3; }
+  }
+
+  /* ── Header ── */
+  .post-header {
+    padding: 4.75rem 0 2.25rem;
+  }
+
+  .post-cover {
+    margin-top: 2rem;
+
+    img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 0.375rem;
+    }
+  }
+
+  @media (min-width: $small-device) {
+    .post-header {
+      padding-top: clamp(4.75rem, 11vh, 6.5rem);
+    }
   }
 
   .back {
@@ -121,203 +215,308 @@ const showToc = toc && tocHeadings.length >= 3;
     font-size: 0.875rem;
     color: var(--text-secondary);
     text-decoration: none;
+    transition: color var(--dur-fast) ease;
     &:hover { color: var(--text-primary); text-decoration: none; }
   }
 
-  /* ── Title ── */
-  .d-title {
-    max-width: 720px;
-    padding: 2rem 0 1.5rem;
+  .back-arrow {
+    display: inline-block;
+    transition: transform var(--dur-base) var(--ease-out);
+  }
 
-    h1 {
-      font-size: 2.25rem;
-      font-weight: 700;
-      line-height: 1.15;
-    }
+  .back:hover .back-arrow {
+    transform: translateX(-3px);
+  }
+
+  h1 {
+    // Hug the text: the title is shared with its entry in the post list, and
+    // the transition between the two only reads as one title growing if both
+    // boxes have the shape of the words.
+    width: fit-content;
+    margin-top: 1.5rem;
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  @media (min-width: $small-device) {
+    h1 { font-size: 2.5rem; }
   }
 
   .subtitle {
-    margin-top: 0.5rem;
-    font-weight: 300;
+    margin-top: 0.75rem;
     font-size: 1.15rem;
     line-height: 1.55;
     color: var(--text-secondary);
   }
 
-  @media (min-width: $small-device) {
-    .d-title h1 { font-size: 2.75rem; }
-  }
+  .post-meta {
+    margin-top: 1.25rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--text-tertiary);
 
-  /* ── Byline ── */
-  .d-byline {
-    max-width: 720px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-    font-size: 0.8rem;
-    line-height: 1.8;
-    padding: 1.25rem 0;
-    border-top: 1px solid var(--border-color);
-    border-bottom: 1px solid var(--border-color);
-  }
+    > * + *::before {
+      content: '·';
+      margin: 0 0.5em;
+    }
 
-  .byline-field {
-    h3 {
-      font-size: 0.6rem;
-      font-weight: 400;
+    .meta-authors {
       color: var(--text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin: 0;
     }
 
-    p {
-      margin: 0.15rem 0 0;
-      font-weight: 500;
+    a {
+      color: inherit;
+      @include link-underline;
+      &:hover { color: var(--text-primary); }
     }
-  }
 
-  .byline-authors {
     .affiliation {
-      font-weight: 400;
-      color: var(--text-secondary);
-    }
-    .author-link {
-      text-decoration: none;
-      &:hover { text-decoration: underline; }
+      color: var(--text-tertiary);
     }
   }
 
-  /* ── Post body: TOC + content grid ── */
-  .post-body {
-    margin-top: 2rem;
-    display: block;
-  }
-
-  .has-toc .post-body {
-    @media (min-width: 1080px) {
-      display: grid;
-      grid-template-columns: 200px 1fr;
-      gap: 3rem;
-    }
-  }
-
-  /* ── TOC sidebar ── */
+  /* ── Table of contents ── */
   .toc {
     margin-bottom: 2rem;
     padding-bottom: 1.5rem;
     border-bottom: 1px solid var(--border-color);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
 
-    @media (min-width: 1080px) {
-      border-bottom: none;
-      border-right: 1px solid var(--border-color);
-      padding-right: 1.5rem;
-      padding-bottom: 0;
-      position: sticky;
-      top: 5rem;
-      align-self: start;
-      max-height: calc(100vh - 6rem);
-      overflow-y: auto;
-    }
+  .toc-title {
+    margin-bottom: 0.6rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
 
-    nav h3 {
-      font-size: 0.7rem;
-      font-weight: 400;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-secondary);
-      margin-bottom: 0.75rem;
-    }
+  .toc-list {
+    position: relative;
+    list-style: none;
 
-    ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    li {
-      margin-bottom: 0.4rem;
+    // Marks the section being read; the script below moves it as you scroll.
+    &::before {
+      content: '';
+      position: absolute;
+      left: -0.85rem;
+      top: 0;
+      width: 2px;
+      height: var(--toc-height, 0);
+      border-radius: 1px;
+      background: var(--text-primary);
+      opacity: var(--toc-visible, 0);
+      transform: translateY(var(--toc-offset, 0));
+      transition:
+        transform var(--dur-base) var(--ease-out),
+        height var(--dur-base) var(--ease-out),
+        opacity var(--dur-fast) ease;
     }
 
     li.depth-3 {
-      padding-left: 1em;
+      padding-left: 0.9rem;
     }
 
     a {
-      font-size: 0.75rem;
-      color: var(--text-secondary);
+      display: block;
+      padding: 0.25rem 0;
+      color: var(--text-tertiary);
       text-decoration: none;
-      line-height: 1.4;
-      &:hover { color: var(--text-primary); }
+      transition: color var(--dur-fast) ease;
+
+      &:hover,
+      &[aria-current] {
+        color: var(--text-primary);
+      }
     }
   }
 
-  /* ── Content ── */
-  .post-content {
-    max-width: 720px;
-    font-size: 1.06rem;
-    line-height: 1.7;
-
-    :global(h2) {
-      font-size: 1.5rem;
-      font-weight: 600;
-      line-height: 1.25;
-      margin: 2.5rem 0 1.25rem;
-      padding-bottom: 0.75rem;
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    :global(h3) {
-      font-size: 1.15rem;
-      font-weight: 700;
-      line-height: 1.4;
-      margin: 2rem 0 0.75rem;
-    }
-
-    :global(h4) {
-      font-size: 0.875rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      line-height: 1.4;
-      margin: 1.5rem 0 0.5rem;
-    }
-
-    :global(p) { margin: 1rem 0; }
-    :global(ul), :global(ol) { padding-left: 1.5em; margin: 1rem 0; }
-    :global(li) { margin: 0.3rem 0; }
-    :global(a) { text-decoration: underline; }
-    :global(figure) { margin: 2rem 0; }
-    :global(figure img) { width: 100%; border-radius: 4px; }
-    :global(figcaption) { font-size: 0.8rem; line-height: 1.5; color: var(--text-secondary); margin-top: 0.5rem; }
-    :global(img) { border-radius: 4px; margin: 1.5rem 0; max-width: 100%; }
-    :global(blockquote) { border-left: 4px solid var(--border-color); margin: 1.5rem 0; padding: 0.75rem 1rem; font-style: italic; color: var(--text-secondary); }
-    :global(pre) { margin: 1.5rem 0; border-radius: 6px; }
-    :global(code) { font-family: $default-mono; }
-    :global(details) { background: var(--code-bg); padding: 0.75rem 1rem; border-radius: 6px; margin: 1.25rem 0; }
-    :global(details summary) { cursor: pointer; font-weight: 500; }
-    :global(details p) { margin: 0.5rem 0; }
-    :global(hr) { border: 0; border-top: 1px solid var(--border-color); margin: 2.5rem 0; }
-  }
-
-  @media (min-width: $small-device) {
-    .post-content {
-      :global(h2) { font-size: 1.75rem; }
-      :global(h3) { font-size: 1.25rem; }
+  // In the flow of the page (narrower screens) there is no gutter for the marker.
+  @media (max-width: 1399px) {
+    .toc-list::before {
+      display: none;
     }
   }
 
+  @media (min-width: 1400px) {
+    .has-toc .toc {
+      grid-column: 1;
+      grid-row: 2;
+      justify-self: end;
+      align-self: start;
+      position: sticky;
+      top: 5.5rem;
+      width: 13rem;
+      max-height: calc(100vh - 7rem);
+      margin: 0.35rem 3.5rem 0 0;
+      padding: 0 0 0 0.85rem;
+      border: none;
+      overflow-y: auto;
+    }
+  }
+
+  /* ── Footer ── */
+  .post-footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+  }
 </style>
 
 <script>
-  function initCitations() {
-    const cites = document.querySelectorAll('.cite-key');
+  // Copying text that includes a formula puts its LaTeX source on the clipboard
+  // (KaTeX's own helper; a few hundred bytes).
+  import 'katex/contrib/copy-tex';
+
+  // ── Copy buttons (code blocks, citation block) ──────────────────
+  document.addEventListener('click', async e => {
+    const button = (e.target as Element | null)?.closest?.<HTMLButtonElement>('.copy-button');
+    const code = button?.parentElement?.querySelector('pre');
+    if (!button || !code) return;
+    try {
+      await navigator.clipboard.writeText(code.textContent ?? '');
+    } catch {
+      return;
+    }
+    button.classList.add('copied');
+    window.setTimeout(() => button.classList.remove('copied'), 1600);
+  });
+
+  // ── Foldable blocks (<details>) ─────────────────────────────────
+  // On its own a <details> snaps open and shut. Take over the click and roll
+  // the content out and back in, with the motion of the bio on the home page.
+  // Whatever else opens one (find-in-page, no JavaScript, reduced motion)
+  // still works; it just isn't animated.
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const foldMotion = new WeakMap<HTMLDetailsElement, Animation[]>();
+
+  function toggleFold(fold: HTMLDetailsElement, body: HTMLElement) {
+    const close = fold.open && !fold.hasAttribute('data-closing');
+    // A second click mid-way turns the motion around from where it has got to.
+    const current = fold.open ? body.getBoundingClientRect().height : 0;
+    const fromOpacity = fold.open ? Number(getComputedStyle(body).opacity) : 0;
+    foldMotion.get(fold)?.forEach(animation => animation.cancel());
+
+    fold.open = true; // the content has to be rendered to be measured, and to be seen leaving
+    fold.toggleAttribute('data-closing', close);
+    fold.setAttribute('data-animating', '');
+    // Only the part of the block that is on screen has to move; the rest is
+    // out of sight either way. A long derivation then unrolls at the pace of
+    // a short one, rather than covering two thousand pixels in half a second.
+    const rect = body.getBoundingClientRect();
+    const onScreen = Math.max(0, Math.min(rect.height, window.innerHeight - rect.top + 32));
+    const from = Math.min(current, onScreen);
+    const to = close ? 0 : onScreen;
+    const duration = Math.min(620, 300 + Math.abs(to - from) * 0.4);
+
+    const size = body.animate({ height: [`${from}px`, `${to}px`] }, { duration, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: 'both' });
+    // The text stays readable while it moves: there at once on the way out,
+    // gone only near the end on the way back in.
+    const fade = body.animate(
+      { opacity: [fromOpacity, close ? 0 : 1] },
+      { duration: close ? 200 : 180, delay: close ? duration * 0.25 : 0, easing: 'ease', fill: 'both' },
+    );
+    foldMotion.set(fold, [size, fade]);
+
+    size.onfinish = () => {
+      if (close) fold.open = false;
+      fold.removeAttribute('data-closing');
+      fold.removeAttribute('data-animating');
+      foldMotion.delete(fold);
+      size.cancel();
+      fade.cancel();
+    };
+  }
+
+  document.addEventListener('click', e => {
+    const target = e.target as Element | null;
+    const summary = target?.closest?.('summary');
+    const fold = summary?.parentElement;
+    if (!(fold instanceof HTMLDetailsElement) || !fold.classList.contains('fold')) return;
+    const body = fold.querySelector<HTMLElement>(':scope > .fold-body');
+    if (!body || reducedMotion.matches || e.defaultPrevented || target?.closest('a')) return;
+    e.preventDefault();
+    toggleFold(fold, body);
+  });
+
+  // A block left open stays open across a language switch.
+  document.addEventListener('site:carry-state', e => {
+    const { next } = (e as CustomEvent<{ next: Document }>).detail;
+    const here = document.querySelectorAll<HTMLDetailsElement>('details.fold');
+    const there = next.querySelectorAll<HTMLDetailsElement>('details.fold');
+    if (here.length !== there.length) return;
+    here.forEach((fold, i) => {
+      there[i].open = fold.open && !fold.hasAttribute('data-closing');
+    });
+  });
+
+  // ── Table of contents: follow the section being read ────────────
+  let tocLinks: HTMLAnchorElement[] = [];
+  let tocTargets: (HTMLElement | null)[] = [];
+  let scheduled = false;
+
+  function updateToc() {
+    scheduled = false;
+    if (tocLinks.length === 0) return;
+
+    // The current section is the last heading to have passed the upper part of
+    // the viewport — or simply the last one, once the page can't scroll further.
+    const line = window.innerHeight * 0.3;
+    let current = -1;
+    tocTargets.forEach((target, i) => {
+      if (target && target.getBoundingClientRect().top <= line) current = i;
+    });
+    if (window.scrollY > 0 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+      current = tocLinks.length - 1;
+    }
+
+    tocLinks.forEach((link, i) => {
+      if (i === current) link.setAttribute('aria-current', 'location');
+      else link.removeAttribute('aria-current');
+    });
+
+    const list = tocLinks[0].closest<HTMLElement>('.toc-list');
+    const link = tocLinks[current];
+    if (!list) return;
+    list.style.setProperty('--toc-visible', link ? '1' : '0');
+    if (link) {
+      list.style.setProperty('--toc-offset', `${link.offsetTop}px`);
+      list.style.setProperty('--toc-height', `${link.offsetHeight}px`);
+    }
+  }
+
+  function scheduleToc() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(updateToc);
+  }
+
+  function collectToc() {
+    tocLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('#toc a[href^="#"]'));
+    tocTargets = tocLinks.map(link => document.getElementById(decodeURIComponent(link.hash.slice(1))));
+    updateToc();
+  }
+
+  window.addEventListener('scroll', scheduleToc, { passive: true });
+  window.addEventListener('resize', scheduleToc, { passive: true });
+  // Fires on first load and again after every client-side navigation.
+  document.addEventListener('astro:page-load', collectToc);
+
+  // ── <Cite> / <Bibliography> components ──────────────────────────
+  // Works on any document: this page, or the incoming one on a language switch
+  // (so its citations are already numbered while the text morphs).
+  function initCitations(doc: Document = document) {
+    const cites = doc.querySelectorAll('.cite-key');
     if (!cites.length) return;
 
     const keyMap = new Map<string, number>();
     let counter = 0;
 
     const refMap = new Map<string, string>();
-    document.querySelectorAll('.ref-entry').forEach(li => {
+    doc.querySelectorAll('.ref-entry').forEach(li => {
       const id = li.getAttribute('id');
       if (id) refMap.set(id.replace('ref-', ''), li.textContent?.trim() || '');
     });
@@ -328,7 +527,7 @@ const showToc = toc && tocHeadings.length >= 3;
       el.textContent = String(keyMap.get(key));
     });
 
-    document.querySelectorAll('[data-cite-tooltip]').forEach(el => {
+    doc.querySelectorAll('[data-cite-tooltip]').forEach(el => {
       const key = el.getAttribute('data-cite-tooltip')!;
       const num = keyMap.get(key);
       const text = refMap.get(key);
@@ -337,5 +536,6 @@ const showToc = toc && tocHeadings.length >= 3;
   }
 
   initCitations();
-  document.addEventListener('astro:after-swap', initCitations);
+  document.addEventListener('astro:after-swap', () => initCitations());
+  document.addEventListener('site:carry-state', e => initCitations((e as CustomEvent<{ next: Document }>).detail.next));
 </script>

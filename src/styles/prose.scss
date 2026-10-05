@@ -1,0 +1,651 @@
+@use 'variables' as *;
+
+// Long-form reading styles for blog posts. Loaded by BlogLayout only.
+//
+// The markup comes from plain Markdown: footnotes and citations are turned
+// into margin notes by plugins/rehype-notes.mjs; tables, figures and code
+// blocks get their wrappers from plugins/rehype-blocks.mjs.
+
+// A post with margin notes needs a margin. Until the screen is wide enough to
+// centre the text column on its own (see BlogLayout.astro), shift it left so
+// that text and notes are centred as a pair.
+@media (min-width: 1100px) and (max-width: 1399px) {
+  article.post:has(.sidenote) {
+    grid-template-columns: minmax(0, 1fr) var(--measure) calc(var(--note-width) + var(--note-gap)) minmax(0, 1fr);
+  }
+}
+
+.prose {
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  overflow-wrap: break-word;
+
+  > :first-child {
+    margin-top: 0;
+  }
+
+  // ── Text ──────────────────────────────────────────────────────
+  h2, h3, h4 {
+    // Leave room for the fixed controls when jumping here from the contents.
+    scroll-margin-top: 5rem;
+  }
+
+  h2 {
+    margin: 3rem 0 1rem;
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    margin: 2.25rem 0 0.75rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  h4 {
+    margin: 1.75rem 0 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  p {
+    margin: 1.15em 0;
+  }
+
+  ul, ol {
+    margin: 1.15em 0;
+    padding-left: 1.4em;
+  }
+
+  li {
+    margin: 0.35em 0;
+
+    > ul, > ol {
+      margin: 0.35em 0;
+    }
+  }
+
+  ::marker {
+    color: var(--text-tertiary);
+  }
+
+  a {
+    text-decoration: underline;
+    text-decoration-color: var(--text-tertiary);
+    text-decoration-thickness: 1px;
+    transition: text-decoration-color var(--dur-fast) ease;
+
+    &:hover {
+      text-decoration-color: currentColor;
+    }
+  }
+
+  blockquote {
+    margin: 1.6rem 0;
+    padding: 0.1rem 0 0.1rem 1.25rem;
+    border-left: 2px solid var(--border-strong);
+    color: var(--text-secondary);
+
+    > :first-child { margin-top: 0; }
+    > :last-child { margin-bottom: 0; }
+  }
+
+  hr {
+    margin: 2.75rem 0;
+  }
+
+  img, video {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+  }
+
+  // ── Figures ───────────────────────────────────────────────────
+  figure {
+    margin: 2.25rem 0;
+
+    img {
+      display: block;
+      width: 100%;
+      margin: 0;
+    }
+  }
+
+  figcaption {
+    margin-top: 0.8rem;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: var(--text-secondary);
+  }
+
+  .caption-label {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  // ── Tables ────────────────────────────────────────────────────
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+
+  th, td {
+    padding: 0.7rem 1.25rem 0.7rem 0;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+    vertical-align: top;
+
+    &:last-child {
+      padding-right: 0;
+    }
+  }
+
+  th {
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    border-bottom-color: var(--border-strong);
+  }
+
+  tbody tr:last-child > td {
+    border-bottom: none;
+  }
+
+  // ── Code ──────────────────────────────────────────────────────
+  code {
+    font-family: $default-mono;
+    font-size: 0.875em;
+  }
+
+  :not(pre) > code {
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    background: var(--code-bg);
+  }
+
+  .code-block {
+    position: relative;
+    margin: 1.75rem 0;
+  }
+
+  pre {
+    margin: 0;
+    padding: 1rem 1.1rem;
+    border-radius: 8px;
+    background: var(--code-bg) !important;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
+
+    code {
+      font-size: inherit;
+    }
+  }
+
+  // The language sits top-left, the copy button top-right.
+  .code-block[data-lang] {
+    pre {
+      padding-top: 2.1rem;
+    }
+
+    &::before {
+      content: attr(data-lang);
+      position: absolute;
+      top: 0.55rem;
+      left: 1.1rem;
+      font-size: 0.6875rem;
+      letter-spacing: 0.02em;
+      color: var(--text-tertiary);
+      pointer-events: none;
+    }
+  }
+
+  .copy-button {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    display: grid;
+    place-items: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--dur-fast) ease, color var(--dur-fast) ease, background-color var(--dur-fast) ease;
+
+    &:hover {
+      color: var(--text-primary);
+      background: var(--hover-bg);
+    }
+
+    svg {
+      grid-area: 1 / 1;
+      transition: opacity var(--dur-fast) ease, transform var(--dur-base) var(--ease-out);
+    }
+
+    .icon-check {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+
+    &.copied {
+      opacity: 1;
+      color: var(--text-primary);
+
+      .icon-copy {
+        opacity: 0;
+        transform: scale(0.6);
+      }
+
+      .icon-check {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  }
+
+  .code-block:hover .copy-button,
+  .copy-button:focus-visible {
+    opacity: 1;
+  }
+
+  // No hover on touch screens: keep the button visible there.
+  @media (hover: none) {
+    .copy-button {
+      opacity: 1;
+    }
+  }
+
+  // ── Math (KaTeX) ──────────────────────────────────────────────
+  .katex {
+    // KaTeX's default 1.21em is tuned for a small-x-height serif.
+    font-size: 1.05em;
+  }
+
+  // A long formula scrolls on its own rather than widening the page. The
+  // padding keeps tall pieces (limits, radicals) clear of the clipped edge.
+  // (Numbered equations poke a couple of pixels past their box; the sideways
+  // padding absorbs that so they don't grow a scrollbar of their own.)
+  .katex-display {
+    margin: 1.5rem -4px;
+    padding: 0.5rem 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    > .katex {
+      white-space: nowrap;
+    }
+  }
+
+  // Equation numbers: quieter than the formula itself.
+  .katex .tag,
+  .katex .eqn-num {
+    color: var(--text-tertiary);
+  }
+
+  // KaTeX pins a `\tag` to the right edge, level with the formula. On a phone
+  // a formula often fills the line and the two collide, so there the tag takes
+  // a line of its own underneath. (The numbers of `align` rows are left
+  // alone: they have to stay level with their rows.)
+  @media (max-width: 599px) {
+    .katex-display > .katex > .katex-html > .tag:not(:has(.eqn-num)) {
+      position: static;
+      display: block;
+      text-align: right;
+
+      // Its strut is as tall as the formula; without it the line is one line tall.
+      > .strut {
+        display: none;
+      }
+    }
+  }
+
+  .sidenote .katex {
+    font-size: 1em;
+  }
+
+  // ── Foldable blocks ───────────────────────────────────────────
+  // A <details> in a post: one quiet row that unfolds in place. The label,
+  // chevron and body wrapper come from plugins/rehype-blocks.mjs, and
+  // BlogLayout.astro animates the height (without JavaScript the block simply
+  // snaps open and shut).
+  .fold {
+    margin: 1.6rem 0;
+    border-block: 1px solid var(--border-color);
+
+    // Several in a row read as one list.
+    + .fold {
+      margin-top: -1.6rem;
+      border-top: none;
+    }
+
+    > summary {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.7rem 0;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      color: var(--text-secondary);
+      cursor: pointer;
+      list-style: none;
+      -webkit-user-select: none;
+      user-select: none;
+      transition: color var(--dur-fast) ease;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+
+      &:hover {
+        color: var(--text-primary);
+      }
+
+      &:focus-visible {
+        outline-offset: 1px;
+        border-radius: 2px;
+      }
+    }
+
+    // Level with the first line of the label, however many lines it runs to.
+    .fold-chevron {
+      flex-shrink: 0;
+      margin-top: calc(0.75em - 5.5px);
+      color: var(--text-tertiary);
+      transition: transform var(--dur-base) var(--ease-out), color var(--dur-fast) ease;
+    }
+
+    > summary:hover .fold-chevron {
+      color: inherit;
+    }
+
+    // `data-closing` is set for the length of the closing animation, so the
+    // label and chevron turn back as it starts rather than once it is over.
+    &[open]:not([data-closing]) > summary {
+      color: var(--text-primary);
+
+      .fold-chevron {
+        transform: rotate(180deg);
+      }
+    }
+
+    &[data-animating] > .fold-body {
+      overflow: hidden;
+    }
+  }
+
+  // A formatting context of its own, so its height is the whole of what is
+  // inside, margins included, and that is what the animation measures. (The
+  // space at the bottom is a margin for the same reason: padding here would
+  // keep the block from closing all the way.)
+  .fold-body {
+    display: flow-root;
+    font-size: 1rem;
+
+    > :first-child {
+      margin-top: 0.3rem;
+    }
+
+    > :last-child {
+      margin-bottom: 1.2rem;
+    }
+
+    // An aside is read in one go; set its formulas a little closer.
+    .katex-display {
+      margin-block: 0.75rem;
+    }
+  }
+
+  // ── Margin notes ──────────────────────────────────────────────
+  // Marker (a <label>), hidden checkbox, then the note itself.
+  .note-mark {
+    position: relative;
+    top: -0.5em;
+    padding: 0 0.1em;
+    font-size: 0.72em;
+    line-height: 0;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: color var(--dur-fast) ease;
+  }
+
+  .note-toggle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+    appearance: none;
+    pointer-events: none;
+  }
+
+  .note-ref:has(.note-toggle:focus-visible) > .note-mark {
+    outline: 2px solid var(--text-primary);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  .sidenote {
+    display: none;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    font-style: normal;
+    line-height: 1.55;
+    letter-spacing: 0;
+    text-align: left;
+    color: var(--text-secondary);
+    transition: color var(--dur-fast) ease;
+  }
+
+  .sidenote-mark {
+    margin-right: 0.1em;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-tertiary);
+  }
+
+  .note-p,
+  .cite-entry {
+    display: block;
+  }
+
+  .note-p,
+  .cite-entry + .cite-entry {
+    margin-top: 0.5em;
+  }
+
+  // A cited work in a note: the title is the link, but in a post with many
+  // citations a margin full of underlines would shout over the text.
+  .sidenote .cite-title {
+    text-decoration: none;
+
+    &:is(a):hover {
+      color: var(--text-primary);
+      text-decoration: underline;
+    }
+  }
+
+  .cite-meta {
+    color: var(--text-tertiary);
+  }
+
+  .note-ref:hover > .note-mark,
+  .note-ref:hover > .sidenote {
+    color: var(--text-primary);
+  }
+
+  // Opened in place: the note unfolds between the lines of the paragraph.
+  .note-toggle:checked + .sidenote {
+    display: block;
+    float: left;
+    clear: both;
+    width: 100%;
+    margin: 0.6rem 0 0.85rem;
+    padding: 0.05rem 0 0.05rem 0.9rem;
+    border-left: 2px solid var(--border-color);
+    animation: note-open var(--dur-base) var(--ease-out);
+  }
+
+  // With room beside the text, notes stand in the margin level with their
+  // marker (floats, so two notes close together simply stack). Repeat
+  // references and notes inside tables or foldable blocks keep the
+  // tap-to-open behaviour.
+  @media (min-width: 1100px) {
+    .note-ref:not(.note-inline) > .note-mark {
+      cursor: default;
+    }
+
+    .note-ref:not(.note-inline) > .sidenote,
+    .note-ref:not(.note-inline) > .note-toggle:checked + .sidenote {
+      display: block;
+      float: right;
+      clear: right;
+      width: var(--note-width);
+      margin: 0.25rem calc(-1 * (var(--note-width) + var(--note-gap))) 0.9rem 0;
+      padding: 0;
+      border: none;
+      animation: none;
+    }
+
+    // Citations tend to come in runs; keep a run of them close together.
+    .cite-ref:not(.note-inline) > .sidenote,
+    .cite-ref:not(.note-inline) > .note-toggle:checked + .sidenote {
+      margin-bottom: 0.55rem;
+      line-height: 1.5;
+    }
+
+    // A work already shown in the margin isn't repeated there.
+    .note-ref:not(.note-inline) .cite-repeat {
+      display: none;
+
+      + .cite-entry {
+        margin-top: 0;
+      }
+    }
+  }
+
+  // ── References & "cite this post" ─────────────────────────────
+  .references,
+  .cite-this {
+    margin-top: 3.5rem;
+    border-top: 1px solid var(--border-color);
+
+    > h2 {
+      margin-top: 2.25rem;
+    }
+  }
+
+  // One rule opens the end matter; the sections inside it follow on normally.
+  .references + .cite-this {
+    margin-top: 0;
+    border-top: none;
+
+    > h2 {
+      margin-top: 3rem;
+    }
+  }
+
+  .references {
+    ol {
+      padding-left: 1.75em;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+
+    li {
+      margin: 0.6em 0;
+      scroll-margin-top: 5rem;
+    }
+
+    .ref-authors {
+      color: var(--text-primary);
+    }
+
+    // What the post took from the source.
+    .ref-note {
+      display: block;
+      margin-top: 0.15em;
+      font-size: 0.8125rem;
+      color: var(--text-tertiary);
+    }
+
+    // The author's own introduction to the list.
+    > p {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+  }
+
+  .cite-this {
+    p {
+      font-size: 0.9375rem;
+      color: var(--text-secondary);
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  }
+}
+
+@keyframes note-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+// Chinese sets better with a little more leading.
+.prose:lang(zh) {
+  .sidenote,
+  figcaption {
+    line-height: 1.7;
+  }
+
+  blockquote {
+    font-style: normal;
+  }
+}
+
+// ── Syntax highlighting ─────────────────────────────────────────
+// Shiki emits both palettes (see astro.config.mjs); pick the dark one here.
+@mixin shiki-dark {
+  .astro-code,
+  .astro-code span {
+    color: var(--shiki-dark) !important;
+    font-style: var(--shiki-dark-font-style) !important;
+    font-weight: var(--shiki-dark-font-weight) !important;
+    text-decoration: var(--shiki-dark-text-decoration) !important;
+  }
+}
+
+[data-theme="dark"] {
+  @include shiki-dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    @include shiki-dark;
+  }
+}

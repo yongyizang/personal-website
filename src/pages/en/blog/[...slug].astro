@@ -3,8 +3,9 @@ import { getCollection, render } from 'astro:content';
 import BlogLayout from '../../../layouts/BlogLayout.astro';
 
 export async function getStaticPaths() {
-  const posts = await getCollection('blog');
-  return posts.filter(p => p.data.lang === 'en').map(post => ({
+  // Drafts can be previewed with `npm run dev`; they are left out of the build.
+  const posts = await getCollection('blog', ({ data }) => data.lang === 'en' && (import.meta.env.DEV || !data.draft));
+  return posts.map(post => ({
     params: { slug: post.data.slug },
     props: { post },
   }));
@@ -17,6 +18,7 @@ const { Content, headings } = await render(post);
 <BlogLayout
   title={post.data.title}
   description={post.data.description}
+  cover={post.data.cover}
   date={post.data.date}
   updated={post.data.updated}
   authors={post.data.authors}
@@ -24,6 +26,8 @@ const { Content, headings } = await render(post);
   translationOf={post.data.translationOf}
   headings={headings}
   toc={post.data.toc}
+  slug={post.data.slug}
+  citation={post.data.citation}
 >
   <Content />
 </BlogLayout>

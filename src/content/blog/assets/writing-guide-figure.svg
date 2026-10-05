@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 300" role="img">
+  <g fill="none" stroke="#8a8a8a" stroke-width="1">
+    <path d="M60 30V250H640"/>
+    <path d="M60 195H640M60 140H640M60 85H640" stroke-dasharray="2 6" opacity=".6"/>
+  </g>
+  <path d="M60 240C140 236 170 150 250 110S420 62 640 54" fill="none" stroke="#8a8a8a" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M60 244C160 242 220 200 310 172S500 128 640 120" fill="none" stroke="#8a8a8a" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="7 7"/>
+  <g fill="#8a8a8a" font-family="system-ui, sans-serif" font-size="13">
+    <text x="350" y="285" text-anchor="middle">training steps</text>
+    <text x="22" y="145" text-anchor="middle" transform="rotate(-90 22 145)">accuracy</text>
+  </g>
+</svg>

@@ -14,6 +14,7 @@ export interface SiteConfig {
   name: Record<Locale, string>;
   description: Record<Locale, string>;
   profileImage: string;
+  googleAnalyticsId?: string;
   links: Array<{ label: string; url: string }>;
 }
 

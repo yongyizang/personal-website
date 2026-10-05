@@ -1,38 +1,74 @@
 ---
+import { getCollection } from 'astro:content';
 import { getLocaleFromUrl } from '../i18n/ui';
 
 const locale = getLocaleFromUrl(Astro.url);
 const currentPath = Astro.url.pathname;
-const enPath = currentPath.replace(`/${locale}`, '/en');
-const zhPath = currentPath.replace(`/${locale}`, '/zh');
+let enPath = currentPath.replace(`/${locale}`, '/en');
+let zhPath = currentPath.replace(`/${locale}`, '/zh');
+
+// A post written in only one language has no counterpart to switch to: send
+// the toggle to the other language's home page rather than to a 404.
+const postSlug = currentPath.match(/^\/(?:en|zh)\/blog\/([^/]+)\/?$/)?.[1];
+if (postSlug) {
+  const versions = await getCollection('blog', ({ data }) => data.slug === postSlug && (import.meta.env.DEV || !data.draft));
+  if (!versions.some(post => post.data.lang === 'en')) enPath = '/en/';
+  if (!versions.some(post => post.data.lang === 'zh')) zhPath = '/zh/';
+}
+
+// The other locale's page is fetched on intent by the morph script in
+// BaseLayout.astro, so Astro's own link prefetching is switched off here.
 ---
 
-<span class="lang-toggle">
-  <a href={enPath} class:list={{ active: locale === 'en' }}>EN</a>
-  <span class="sep">/</span>
-  <a href={zhPath} class:list={{ active: locale === 'zh' }}>中文</a>
+<span class="lang-toggle" data-active={locale}>
+  <a href={enPath} hreflang="en" lang="en" data-locale="en" data-astro-prefetch="false"
+     class:list={{ active: locale === 'en' }} aria-current={locale === 'en' ? 'true' : undefined}>EN</a>
+  <a href={zhPath} hreflang="zh-CN" lang="zh-CN" data-locale="zh" data-astro-prefetch="false"
+     class:list={{ active: locale === 'zh' }} aria-current={locale === 'zh' ? 'true' : undefined}>中文</a>
 </span>
 
 <style>
   .lang-toggle {
-    font-size: 0.8rem;
-    display: flex;
+    position: relative;
+    display: inline-grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
     align-items: center;
-    gap: 0.3em;
+    font-size: 0.78rem;
+    line-height: 1;
+  }
+
+  /* Thumb behind the active option; slides as soon as a switch starts. */
+  .lang-toggle::before {
+    content: '';
+    position: absolute;
+    inset: 0 50% 0 0;
+    border-radius: 999px;
+    background: var(--hover-bg);
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+
+  .lang-toggle[data-active="zh"]::before {
+    transform: translateX(100%);
   }
 
   a {
+    position: relative;
+    display: grid;
+    place-items: center;
+    height: 1.75rem;
+    padding: 0 0.65rem;
+    border-radius: 999px;
     color: var(--text-tertiary);
     text-decoration: none;
+    white-space: nowrap;
+    transition: color var(--dur-fast) ease;
+
     &:hover { color: var(--text-primary); text-decoration: none; }
+    &:focus-visible { outline-offset: 1px; }
     &.active {
       color: var(--text-primary);
-      font-weight: 700;
-      text-decoration: underline;
-      text-underline-offset: 3px;
       pointer-events: none;
     }
   }
-
-  .sep { color: var(--text-tertiary); }
 </style>

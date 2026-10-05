@@ -1,0 +1,111 @@
+// Motion tokens — one set of curves and durations for the whole site, so
+// hovers, reveals and the scripted animations all move with the same voice.
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 0.16s;
+  --dur-base: 0.28s;
+  --dur-slow: 0.5s;
+}
+
+// ── First-load entrance ──────────────────────────────────────────
+// `.intro` is set on <html> by an inline script in BaseHead before first
+// paint, and only on a real page load: client-side navigations swap the root
+// attributes, so the entrance never replays after a language switch.
+// Without JavaScript the class is never added and content is simply visible.
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.intro .reveal {
+  animation: rise-in 0.7s var(--ease-out) both;
+  animation-delay: calc(var(--reveal-order, 0) * 70ms);
+}
+
+// ── Page-to-page navigation ──────────────────────────────────────
+// Fade through: the outgoing page clears quickly, the incoming one settles in
+// from slightly below. (The language toggle skips this and morphs the text in
+// place instead — see BaseLayout.astro.)
+@keyframes page-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+::view-transition-old(root) {
+  animation: page-out 0.16s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+::view-transition-new(root) {
+  animation: page-in 0.4s var(--ease-out) 0.06s both;
+}
+
+// ── Theme switch ─────────────────────────────────────────────────
+// The new theme is revealed through a circle growing out of the toggle (see
+// ThemeToggle.astro). While that runs every element-level transition is
+// frozen, so the snapshot being revealed is the finished new theme rather
+// than a page half-way through fading its colours.
+html[data-theme-switching] {
+  &,
+  & *,
+  & *::before,
+  & *::after {
+    transition: none !important;
+  }
+
+  // Fold independently-captured elements (e.g. the util bar) back into the
+  // root snapshot so the circle sweeps over everything at once.
+  & * {
+    view-transition-name: none !important;
+  }
+
+  &::view-transition-old(root),
+  &::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+
+  &::view-transition-old(root) {
+    z-index: 0;
+  }
+
+  &::view-transition-new(root) {
+    z-index: 1;
+  }
+}
+
+// Browsers without the View Transitions API get a plain cross-fade in which
+// every colour moves together.
+html.theme-fade {
+  &,
+  & *,
+  & *::before,
+  & *::after {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease,
+      fill 0.3s ease, stroke 0.3s ease, box-shadow 0.3s ease !important;
+  }
+}
+
+// ── Reduced motion ───────────────────────────────────────────────
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}

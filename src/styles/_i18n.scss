@@ -5,3 +5,9 @@
     line-height: 1.75;
   }
 }
+
+// Let the browser add the customary gap between Chinese and Latin/digits
+// ("加入Smule担任" → "加入 Smule 担任") where it is supported.
+:lang(zh) {
+  text-autospace: normal;
+}

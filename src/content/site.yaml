@@ -16,8 +16,14 @@ description:
   en: AI Researcher
   zh: AI 研究员
 
-# Profile image — path relative to /public
-profileImage: /favicon.jpg
+# Profile image — path relative to /public. Also the picture in link previews
+# (X, LinkedIn, WeChat…) for every page that doesn't have a cover of its own,
+# so keep it square and at least 600px wide.
+profileImage: /profile.jpg
+
+# Google Analytics 4 measurement ID ("G-…"). Remove the line to turn analytics
+# off. It is only added to production builds, never to `npm run dev`.
+googleAnalyticsId: G-LWPLNJ0FG3
 
 # Social links — rendered as a row of text links under the bio.
 # Add/remove/reorder freely. `label` is shown, `url` is the target.

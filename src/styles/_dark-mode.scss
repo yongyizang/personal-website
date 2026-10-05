@@ -1,40 +1,56 @@
-:root {
+// Theme tokens. Text greys are tuned to stay readable on their background:
+// secondary ≥ 7:1, tertiary ≥ 4.5:1 (WCAG AA for small text).
+@mixin light {
+  color-scheme: light;
   --bg-primary: #fafaf7;
   --bg-secondary: #f0efeb;
-  --text-primary: #000;
-  --text-secondary: #828282;
-  --text-tertiary: #aaa;
+  --text-primary: #111;
+  --text-secondary: #555;
+  --text-tertiary: #737373;
   --border-color: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.28);
   --code-bg: rgba(0, 0, 0, 0.04);
-  --hover-bg: rgba(0, 0, 0, 0.05);
-  --selection-bg: #000;
+  --hover-bg: rgba(0, 0, 0, 0.055);
+  --selection-bg: #111;
   --selection-text: #fff;
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --focus-halo: rgba(0, 0, 0, 0.05);
+  // Drives the theme toggle's thumb and icon colours without any scripting.
+  --theme-thumb: 0;
+  --theme-sun: var(--text-primary);
+  --theme-moon: var(--text-tertiary);
 }
 
-[data-theme="dark"] {
+@mixin dark {
+  color-scheme: dark;
   --bg-primary: #1a1a1b;
   --bg-secondary: #242425;
   --text-primary: #efefef;
   --text-secondary: #a8a8a8;
-  --text-tertiary: #666;
+  --text-tertiary: #858585;
   --border-color: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.3);
   --code-bg: rgba(255, 255, 255, 0.06);
-  --hover-bg: rgba(255, 255, 255, 0.06);
+  --hover-bg: rgba(255, 255, 255, 0.08);
   --selection-bg: #e8e8e8;
   --selection-text: #1c1c1d;
+  --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --focus-halo: rgba(255, 255, 255, 0.06);
+  --theme-thumb: 1;
+  --theme-sun: var(--text-tertiary);
+  --theme-moon: var(--text-primary);
+}
+
+:root {
+  @include light;
+}
+
+[data-theme="dark"] {
+  @include dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg-primary: #1a1a1b;
-    --bg-secondary: #242425;
-    --text-primary: #efefef;
-    --text-secondary: #a8a8a8;
-    --text-tertiary: #666;
-    --border-color: rgba(255, 255, 255, 0.1);
-    --code-bg: rgba(255, 255, 255, 0.06);
-    --hover-bg: rgba(255, 255, 255, 0.06);
-    --selection-bg: #e8e8e8;
-    --selection-text: #1c1c1d;
+    @include dark;
   }
 }

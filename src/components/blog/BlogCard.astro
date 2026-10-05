@@ -1,6 +1,6 @@
 ---
 import type { Locale } from '../../i18n/ui';
-import { getLocalizedPath } from '../../i18n/ui';
+import { getLocalizedPath, t } from '../../i18n/ui';
 
 interface Props {
   post: {
@@ -11,35 +11,63 @@ interface Props {
       date: Date;
       slug: string;
       lang: string;
+      draft?: boolean;
     };
   };
   locale: Locale;
 }
 
 const { post, locale } = Astro.props;
-const { title, description, date, slug } = post.data;
+const { title, description, date, slug, draft } = post.data;
 ---
 
 <article class="blog-card">
-  <h3><a href={getLocalizedPath(`/blog/${slug}`, locale)} class="post-link">{title}</a></h3>
-  {description && <p class="description">{description}</p>}
-  <p class="meta">
-    <time datetime={date.toISOString()}>
-      {date.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-    </time>
-  </p>
+  <time class="meta" datetime={date.toISOString()}>
+    {date.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })}
+  </time>
+  <div class="body">
+    {/* Shares its name with the post's <h1>, so the title carries over between the two pages. */}
+    <h3 transition:name={`post-title-${slug}`}>
+      <a href={getLocalizedPath(`/blog/${slug}`, locale)} class="post-link">{title}</a>
+      {draft && <span class="draft-tag">{t(locale, 'post.draft')}</span>}
+    </h3>
+    {description && <p class="description">{description}</p>}
+  </div>
 </article>
 
 <style lang="scss">
   @use '../../styles/variables' as *;
 
+  // Date in its own column, as in the news list above.
   .blog-card {
-    padding: 1rem 0;
+    display: grid;
+    gap: 0.25rem;
+    padding: 1.15rem 0;
     border-bottom: 1px solid var(--border-color);
-    transition: background 0.15s;
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  @media (min-width: $small-device) {
+    .blog-card {
+      grid-template-columns: 7.5rem 1fr;
+      column-gap: 1.5rem;
+      align-items: baseline;
+    }
+  }
+
+  .meta {
+    font-size: 0.8125rem;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   h3 {
+    // Fit the text, so the shared-title transition moves the title rather than a full-width box.
+    width: fit-content;
     font-weight: 700;
     font-size: 1.05rem;
     line-height: 1.4;
@@ -47,20 +75,24 @@ const { title, description, date, slug } = post.data;
 
   .post-link {
     color: var(--text-primary);
-    text-decoration: none;
-    &:hover { text-decoration: underline; }
+    @include link-underline;
+  }
+
+  .draft-tag {
+    margin-left: 0.5rem;
+    padding: 0.1em 0.45em;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 400;
+    color: var(--text-tertiary);
+    vertical-align: 0.1em;
   }
 
   .description {
-    margin-top: 0.2rem;
-    font-size: 0.85rem;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
     color: var(--text-secondary);
-    line-height: 1.5;
-  }
-
-  .meta {
-    margin-top: 0.35rem;
-    font-size: 0.8rem;
-    color: var(--text-tertiary);
+    line-height: 1.55;
   }
 </style>

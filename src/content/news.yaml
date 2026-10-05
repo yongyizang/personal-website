@@ -7,6 +7,30 @@
 # Order matters — put the newest at the top.
 # ────────────────────────────────────────────────────────────────
 
+- date: 2025-09
+  en: Founded Smule Labs; Worked as Director of Research and Labs at Smule.
+  zh: 成立 Smule Labs；在 Smule 担任研究与实验室总监。
+
+- date: 2025-08
+  en: Awarded Best Paper at ISMIR 2025.
+  zh: 在 ISMIR 2025 获得最佳论文奖。
+
 - date: 2024-12
-  en: Joined Smule as Director of Research and Labs.
-  zh: 加入Smule担任研究与实验室总监。
+  en: Joined Smule as a Research Scientist.
+  zh: 加入 Smule 担任研究科学家。
+
+- date: 2023-11
+  en: Two works are accepted to ICASSP 2024.
+  zh: 两篇论文被 ICASSP 2024 接收。
+
+- date: 2023-06
+  en: Joined Neosensory as a Machine Learning Engineer.
+  zh: 加入 Neosensory 担任机器学习工程师。
+
+- date: 2023-03
+  en: One work is accepted to INTERSPEECH 2023.
+  zh: 一篇论文被 INTERSPEECH 2023 接收。
+
+- date: 2023-01
+  en: Awarded Best Music at Bilibili Tuyiyue 2023; Worked as composer, producer and arranger.
+  zh: 在 Bilibili 图一乐 2023 获第一名；担任作曲、制作和编曲。

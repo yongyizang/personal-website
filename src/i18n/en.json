@@ -1,4 +1,15 @@
 {
   "home.bioMore": "more",
-  "home.bioLess": "less"
+  "home.bioLess": "less",
+  "home.links": "Links",
+  "blog.empty": "No posts yet.",
+  "post.back": "home",
+  "post.contents": "Contents",
+  "post.updated": "Updated",
+  "post.citation": "Citation",
+  "post.citeAs": "Please cite this post as:",
+  "post.citeBibtex": "Or use the BibTeX entry:",
+  "post.copy": "Copy",
+  "post.copied": "Copied",
+  "post.draft": "draft"
 }

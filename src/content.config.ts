@@ -22,9 +22,13 @@ const blog = defineCollection({
       return entry.replace(/\.mdx$/, '');
     },
   }),
-  schema: z.object({
+  schema: ({ image }) => z.object({
     title: z.string(),
     description: z.string(),
+    cover: z.object({
+      src: image(),
+      alt: z.string(),
+    }).optional(),
     date: z.coerce.date(),
     updated: z.coerce.date().optional(),
     authors: z.array(z.object({
@@ -41,12 +45,16 @@ const blog = defineCollection({
       year: z.number().optional(),
       url: z.string().optional(),
       doi: z.string().optional(),
+      // What exactly the post takes from this source; shown under the entry in the reference list.
+      note: z.string().optional(),
     })).default([]),
     draft: z.boolean().default(false),
     lang: z.enum(['en', 'zh']),
     slug: z.string(),
     translationOf: z.string().optional(),
     toc: z.boolean().default(true),
+    // Adds a "Citation" section (plain text + BibTeX) to the end of the post.
+    citation: z.boolean().default(false),
   }),
 });
 

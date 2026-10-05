@@ -1,16 +1,23 @@
 @use 'variables' as *;
 @use 'reset';
 @use 'dark-mode';
+@use 'motion';
 @use 'typography';
 @use 'search';
 @use 'i18n';
+
+html {
+  // Keep the centred column from shifting sideways when the page grows past
+  // the viewport (e.g. expanding the bio) on platforms with classic scrollbars.
+  scrollbar-gutter: stable;
+}
 
 body {
   background-color: var(--bg-primary);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  min-height: 100dvh;
 }
 
 img {
