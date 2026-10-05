@@ -493,6 +493,15 @@
     color: var(--text-primary);
   }
 
+  // A paragraph with a note in it wraps the ordinary way. `text-wrap: pretty`
+  // (set on all paragraphs in _typography.scss) breaks a paragraph's lines as
+  // a whole, and browsers give that up as soon as a float appears inside it.
+  // An opened note is a float, so tapping a marker would re-break the
+  // paragraph: its last lines in Chrome, every line of it in Safari.
+  :is(p, li, blockquote, figcaption):has(.note-ref) {
+    text-wrap: wrap;
+  }
+
   // Opened in place: the note unfolds between the lines of the paragraph.
   .note-toggle:checked + .sidenote {
     display: block;
